@@ -277,40 +277,50 @@ def _resolve_session_id(mgr, prefix: str) -> str | None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="flaude", description="Claude Code session manager"
+        prog="flaude",
+        description="Claude Code session manager — TUI dashboard for monitoring and managing multiple concurrent sessions.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "examples:\n"
+            "  flaude              Launch the dashboard\n"
+            "  flaude init         Install hooks into Claude Code\n"
+            "  flaude status       Quick status table (no TUI)\n"
+            "  flaude approve ab3  Approve oldest pending permission for session ab3…\n"
+        ),
     )
     sub = parser.add_subparsers(dest="command")
 
     # init
-    p_init = sub.add_parser("init", help="Install flaude hooks")
+    p_init = sub.add_parser(
+        "init", help="Install flaude hooks into ~/.claude/settings.json"
+    )
     p_init.add_argument(
-        "--dry-run", action="store_true", help="Preview without changes"
+        "--dry-run", action="store_true", help="Preview changes without writing"
     )
 
     # uninstall
-    p_uninst = sub.add_parser("uninstall", help="Remove flaude hooks")
-    p_uninst.add_argument(
-        "--dry-run", action="store_true", help="Preview without changes"
+    p_uninst = sub.add_parser(
+        "uninstall", help="Remove flaude hooks from Claude Code settings"
     )
     p_uninst.add_argument(
-        "--purge", action="store_true", help="Also remove config files"
+        "--dry-run", action="store_true", help="Preview changes without writing"
     )
-
-    # run
-    sub.add_parser("run", help="Launch TUI dashboard")
+    p_uninst.add_argument(
+        "--purge", action="store_true", help="Also remove ~/.config/flaude/"
+    )
 
     # status
-    sub.add_parser("status", help="Quick status check")
+    sub.add_parser("status", help="Quick status table without launching the TUI")
 
     # approve
-    p_approve = sub.add_parser("approve", help="Approve a pending permission")
+    p_approve = sub.add_parser("approve", help="Approve a pending permission request")
     p_approve.add_argument("session", help="Session ID or prefix")
     p_approve.add_argument(
         "request", nargs="?", help="Request ID (default: oldest pending)"
     )
 
     # deny
-    p_deny = sub.add_parser("deny", help="Deny a pending permission")
+    p_deny = sub.add_parser("deny", help="Deny a pending permission request")
     p_deny.add_argument("session", help="Session ID or prefix")
     p_deny.add_argument(
         "request", nargs="?", help="Request ID (default: oldest pending)"
@@ -321,13 +331,15 @@ def main() -> None:
     commands = {
         "init": cmd_init,
         "uninstall": cmd_uninstall,
-        "run": cmd_run,
         "status": cmd_status,
         "approve": cmd_approve,
         "deny": cmd_deny,
     }
 
-    if args.command in commands:
+    if args.command is None:
+        # No subcommand → launch the dashboard
+        cmd_run(args)
+    elif args.command in commands:
         commands[args.command](args)
     else:
         parser.print_help()

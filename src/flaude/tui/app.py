@@ -52,9 +52,13 @@ class FlaudeApp(App):
         active = {
             sid: s for sid, s in sessions.items() if s.status != SessionStatus.ENDED
         }
-        self.query_one(SessionTable).update_sessions(active)
+        table = self.query_one(SessionTable)
+        table.update_sessions(active)
         self.query_one(PermissionPanel).update_permissions(active)
-        self.query_one(ActivityLog).refresh_log()
+
+        log = self.query_one(ActivityLog)
+        log.set_session_filter(table.get_selected_session_id())
+        log.refresh_log()
 
         # Update title with counts
         pending = sum(len(s.pending_permissions) for s in active.values())

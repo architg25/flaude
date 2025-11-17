@@ -28,6 +28,9 @@ class SessionTable(DataTable):
         self.border_title = "Sessions"
 
     def update_sessions(self, sessions: dict[str, SessionState]) -> None:
+        # Preserve selection across refreshes
+        selected_key = self.get_selected_session_id()
+
         self.clear()
 
         if not sessions:
@@ -48,7 +51,8 @@ class SessionTable(DataTable):
         )
 
         now = utcnow()
-        for state in sorted_sessions:
+        restore_row = 0
+        for idx, state in enumerate(sorted_sessions):
             icon, css_class = STATUS_ICONS.get(state.status, ("?", "status-idle"))
             project = Path(state.cwd).name if state.cwd else "?"
             last_tool = state.last_tool.name if state.last_tool else "-"
@@ -66,6 +70,12 @@ class SessionTable(DataTable):
                 str(tool_count),
                 key=state.session_id,
             )
+            if state.session_id == selected_key:
+                restore_row = idx
+
+        # Restore cursor to previously selected row
+        if self.row_count > 0:
+            self.move_cursor(row=restore_row)
 
     def get_selected_session_id(self) -> str | None:
         """Return the session_id of the currently highlighted row."""
