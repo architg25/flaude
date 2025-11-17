@@ -1,0 +1,36 @@
+version: 1
+defaults:
+  approval_timeout: 120
+  no_dashboard_behavior: passthrough
+
+rules:
+  - name: safe_reads
+    tools: [Read, Glob, Grep, WebSearch, WebFetch]
+    action: allow
+
+  - name: safe_bash
+    tools: [Bash]
+    match:
+      command: "^(git (status|log|diff|branch|show|fetch)|ls|cat|head|tail|pwd|which|wc)"
+    action: allow
+
+  - name: block_dangerous
+    tools: [Bash]
+    match:
+      command: "(rm\\s+-rf\\s+/[^t]|mkfs|dd\\s+if=)"
+    action: deny
+    reason: "Extremely dangerous command blocked"
+
+  - name: destructive_commands
+    tools: [Bash]
+    match:
+      command: "(rm\\s+-r|DROP\\s+|DELETE\\s+FROM|git\\s+push\\s+--force)"
+    action: ask_dashboard
+    timeout: 180
+
+  - name: git_push
+    tools: [Bash]
+    match:
+      command: "git\\s+push"
+    action: ask_dashboard
+    timeout: 60

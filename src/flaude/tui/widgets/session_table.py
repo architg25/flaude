@@ -1,0 +1,87 @@
+"""Session list widget — DataTable of active Claude Code sessions."""
+
+from datetime import datetime
+
+from flaude.constants import utcnow
+from pathlib import Path
+
+from textual.widgets import DataTable, Static
+
+from flaude.state.models import SessionState, SessionStatus
+
+STATUS_ICONS = {
+    SessionStatus.WORKING: ("▶", "status-working"),
+    SessionStatus.IDLE: ("·", "status-idle"),
+    SessionStatus.WAITING_PERMISSION: ("!", "status-waiting"),
+    SessionStatus.WAITING_ANSWER: ("?", "status-waiting"),
+    SessionStatus.ERROR: ("✗", "status-error"),
+    SessionStatus.ENDED: ("○", "status-ended"),
+}
+
+
+class SessionTable(DataTable):
+    """Table showing all active sessions."""
+
+    def on_mount(self) -> None:
+        self.cursor_type = "row"
+        self.add_columns("ST", "Session", "Project", "Last Tool", "Age", "#")
+        self.border_title = "Sessions"
+
+    def update_sessions(self, sessions: dict[str, SessionState]) -> None:
+        self.clear()
+
+        if not sessions:
+            return
+
+        # Sort: waiting first, then working, then idle, then ended
+        priority = {
+            SessionStatus.WAITING_PERMISSION: 0,
+            SessionStatus.WAITING_ANSWER: 0,
+            SessionStatus.ERROR: 1,
+            SessionStatus.WORKING: 2,
+            SessionStatus.IDLE: 3,
+            SessionStatus.ENDED: 4,
+        }
+        sorted_sessions = sorted(
+            sessions.values(),
+            key=lambda s: (priority.get(s.status, 5), s.started_at),
+        )
+
+        now = utcnow()
+        for state in sorted_sessions:
+            icon, css_class = STATUS_ICONS.get(state.status, ("?", "status-idle"))
+            project = Path(state.cwd).name if state.cwd else "?"
+            last_tool = state.last_tool.name if state.last_tool else "-"
+            if state.last_tool and state.last_tool.summary:
+                last_tool = f"{state.last_tool.name}:{state.last_tool.summary[:12]}"
+            age = _format_age(now, state.started_at)
+            tool_count = sum(state.tool_stats.values())
+
+            self.add_row(
+                icon,
+                state.session_id[:8],
+                project[:20],
+                last_tool[:20],
+                age,
+                str(tool_count),
+                key=state.session_id,
+            )
+
+    def get_selected_session_id(self) -> str | None:
+        """Return the session_id of the currently highlighted row."""
+        if self.row_count == 0:
+            return None
+        row_key, _ = self.coordinate_to_cell_key(self.cursor_coordinate)
+        return str(row_key.value) if row_key else None
+
+
+def _format_age(now: datetime, started: datetime) -> str:
+    delta = now - started
+    minutes = int(delta.total_seconds() // 60)
+    if minutes < 60:
+        return f"{minutes}m"
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours}h{minutes % 60}m"
+    days = hours // 24
+    return f"{days}d{hours % 24}h"

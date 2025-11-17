@@ -1,0 +1,60 @@
+Screen {
+    layout: vertical;
+}
+
+#session-table {
+    height: 2fr;
+    margin: 0 1;
+    border: solid $primary;
+}
+
+#permission-panel {
+    height: 1fr;
+    min-height: 5;
+    margin: 0 1;
+    border: solid $warning;
+}
+
+#activity-log {
+    height: 1fr;
+    margin: 0 1;
+    border: solid $surface;
+}
+
+.status-working {
+    color: $success;
+}
+
+.status-idle {
+    color: $text-muted;
+}
+
+.status-waiting {
+    color: $warning;
+    text-style: bold;
+}
+
+.status-error {
+    color: $error;
+    text-style: bold;
+}
+
+.status-ended {
+    color: $text-disabled;
+}
+
+PermissionPanel .urgent {
+    background: $warning 20%;
+}
+
+#no-permissions {
+    color: $text-muted;
+    text-style: italic;
+    padding: 1 2;
+}
+
+#no-sessions {
+    color: $text-muted;
+    text-style: italic;
+    padding: 1 2;
+}
