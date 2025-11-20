@@ -22,6 +22,7 @@ class FlaudeApp(App):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
+        Binding("enter", "goto_session", "Go To", show=False),
         Binding("g", "goto_session", "Go To"),
         Binding("question_mark", "help", "Help"),
     ]
