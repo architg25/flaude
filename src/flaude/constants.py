@@ -26,15 +26,11 @@ RULES_PATH = Path(
 
 CLAUDE_SETTINGS_PATH = Path(os.path.expanduser("~/.claude/settings.json"))
 
-DEFAULT_APPROVAL_TIMEOUT = int(os.environ.get("FLAUDE_APPROVAL_TIMEOUT", "120"))
-POLL_INTERVAL = float(os.environ.get("FLAUDE_POLL_INTERVAL", "0.5"))
 STALE_SESSION_TIMEOUT = int(os.environ.get("FLAUDE_STALE_SESSION_TIMEOUT", "1800"))
-NO_DASHBOARD_BEHAVIOR = os.environ.get("FLAUDE_NO_DASHBOARD_BEHAVIOR", "passthrough")
 TUI_REFRESH_INTERVAL = float(os.environ.get("FLAUDE_TUI_REFRESH_INTERVAL", "1.0"))
 TERMINAL_OVERRIDE = os.environ.get("FLAUDE_TERMINAL")
 
-# Hook timeout for PreToolUse (must be > DEFAULT_APPROVAL_TIMEOUT)
-HOOK_TIMEOUT_PRETOOLUSE = 300
+# All hooks are non-blocking (monitor only), so a short timeout is fine
 HOOK_TIMEOUT_DEFAULT = 10
 
 # Identifier used to detect flaude hooks in settings.json

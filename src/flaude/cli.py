@@ -1,4 +1,4 @@
-"""CLI entry point: flaude init, run, uninstall, status, approve, deny."""
+"""CLI entry point: flaude init, run, uninstall, status."""
 
 import argparse
 import json
@@ -10,10 +10,8 @@ from pathlib import Path
 
 from flaude.constants import (
     CLAUDE_SETTINGS_PATH,
-    DECISIONS_DIR,
     HOOK_COMMAND,
     HOOK_TIMEOUT_DEFAULT,
-    HOOK_TIMEOUT_PRETOOLUSE,
     RULES_PATH,
     SESSIONS_DIR,
     DASHBOARD_PID,
@@ -21,26 +19,26 @@ from flaude.constants import (
 )
 
 
-# Events and their hook timeout
-HOOK_EVENTS = {
-    "PreToolUse": HOOK_TIMEOUT_PRETOOLUSE,
-    "PostToolUse": HOOK_TIMEOUT_DEFAULT,
-    "SessionStart": HOOK_TIMEOUT_DEFAULT,
-    "SessionEnd": HOOK_TIMEOUT_DEFAULT,
-    "Stop": HOOK_TIMEOUT_DEFAULT,
-    "Notification": HOOK_TIMEOUT_DEFAULT,
-    "UserPromptSubmit": HOOK_TIMEOUT_DEFAULT,
-}
+# All hooks are non-blocking (monitor only)
+HOOK_EVENTS = [
+    "PreToolUse",
+    "PostToolUse",
+    "SessionStart",
+    "SessionEnd",
+    "Stop",
+    "Notification",
+    "UserPromptSubmit",
+]
 
 
-def _build_hook_entry(timeout: int) -> dict:
+def _build_hook_entry() -> dict:
     return {
         "matcher": "",
         "hooks": [
             {
                 "type": "command",
                 "command": HOOK_COMMAND,
-                "timeout": timeout,
+                "timeout": HOOK_TIMEOUT_DEFAULT,
             }
         ],
     }
@@ -98,7 +96,7 @@ def cmd_init(args: argparse.Namespace) -> None:
     if args.dry_run:
         print("Dry run — would install hooks for events:")
         for event in HOOK_EVENTS:
-            print(f"  {event} (timeout: {HOOK_EVENTS[event]}s)")
+            print(f"  {event} (timeout: {HOOK_TIMEOUT_DEFAULT}s)")
         print(f"\nSettings file: {CLAUDE_SETTINGS_PATH}")
         return
 
@@ -106,12 +104,12 @@ def cmd_init(args: argparse.Namespace) -> None:
     if backup:
         print(f"Backed up settings to {backup}")
 
-    for event, timeout in HOOK_EVENTS.items():
+    for event in HOOK_EVENTS:
         event_hooks = hooks.setdefault(event, [])
         # Remove existing flaude hooks
         event_hooks[:] = [h for h in event_hooks if not _is_flaude_hook(h)]
         # Add new flaude hook
-        event_hooks.append(_build_hook_entry(timeout))
+        event_hooks.append(_build_hook_entry())
 
     _save_settings(settings)
     ensure_dirs()
@@ -121,7 +119,7 @@ def cmd_init(args: argparse.Namespace) -> None:
     print(f"  Settings: {CLAUDE_SETTINGS_PATH}")
     print(f"  Rules: {RULES_PATH}")
     print(f"  State dir: {SESSIONS_DIR.parent}")
-    print(f"\nRun 'flaude run' to start the dashboard.")
+    print(f"\nRun 'flaude' to start the dashboard.")
 
 
 def cmd_uninstall(args: argparse.Namespace) -> None:
@@ -220,72 +218,16 @@ def cmd_status(args: argparse.Namespace) -> None:
         print(f"\n{pending} pending permission(s)")
 
 
-def cmd_approve(args: argparse.Namespace) -> None:
-    """Approve a pending permission from CLI."""
-    from flaude.state.manager import StateManager
-
-    mgr = StateManager()
-    session_id = _resolve_session_id(mgr, args.session)
-    if not session_id:
-        return
-
-    request_id = args.request
-    if not request_id:
-        state = mgr.load_session(session_id)
-        if not state or not state.pending_permissions:
-            print(f"No pending permissions for session {session_id[:12]}")
-            return
-        request_id = state.pending_permissions[0].request_id
-
-    mgr.write_decision(session_id, request_id, "allow")
-    print(f"Approved {request_id} for session {session_id[:12]}")
-
-
-def cmd_deny(args: argparse.Namespace) -> None:
-    """Deny a pending permission from CLI."""
-    from flaude.state.manager import StateManager
-
-    mgr = StateManager()
-    session_id = _resolve_session_id(mgr, args.session)
-    if not session_id:
-        return
-
-    request_id = args.request
-    if not request_id:
-        state = mgr.load_session(session_id)
-        if not state or not state.pending_permissions:
-            print(f"No pending permissions for session {session_id[:12]}")
-            return
-        request_id = state.pending_permissions[0].request_id
-
-    mgr.write_decision(session_id, request_id, "deny")
-    print(f"Denied {request_id} for session {session_id[:12]}")
-
-
-def _resolve_session_id(mgr, prefix: str) -> str | None:
-    """Resolve a session ID prefix to a full session ID."""
-    sessions = mgr.load_all_sessions()
-    matches = [sid for sid in sessions if sid.startswith(prefix)]
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) == 0:
-        print(f"No session found matching '{prefix}'")
-        return None
-    print(f"Ambiguous prefix '{prefix}', matches: {', '.join(s[:12] for s in matches)}")
-    return None
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="flaude",
-        description="Claude Code session manager — TUI dashboard for monitoring and managing multiple concurrent sessions.",
+        description="Claude Code session manager — TUI dashboard for monitoring multiple concurrent sessions.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "examples:\n"
             "  flaude              Launch the dashboard\n"
             "  flaude init         Install hooks into Claude Code\n"
             "  flaude status       Quick status table (no TUI)\n"
-            "  flaude approve ab3  Approve oldest pending permission for session ab3…\n"
         ),
     )
     sub = parser.add_subparsers(dest="command")
@@ -312,32 +254,15 @@ def main() -> None:
     # status
     sub.add_parser("status", help="Quick status table without launching the TUI")
 
-    # approve
-    p_approve = sub.add_parser("approve", help="Approve a pending permission request")
-    p_approve.add_argument("session", help="Session ID or prefix")
-    p_approve.add_argument(
-        "request", nargs="?", help="Request ID (default: oldest pending)"
-    )
-
-    # deny
-    p_deny = sub.add_parser("deny", help="Deny a pending permission request")
-    p_deny.add_argument("session", help="Session ID or prefix")
-    p_deny.add_argument(
-        "request", nargs="?", help="Request ID (default: oldest pending)"
-    )
-
     args = parser.parse_args()
 
     commands = {
         "init": cmd_init,
         "uninstall": cmd_uninstall,
         "status": cmd_status,
-        "approve": cmd_approve,
-        "deny": cmd_deny,
     }
 
     if args.command is None:
-        # No subcommand → launch the dashboard
         cmd_run(args)
     elif args.command in commands:
         commands[args.command](args)

@@ -1,26 +1,20 @@
 """Single entry point for all Claude Code hook events.
 
 Claude Code invokes: python3 -m flaude.hooks.dispatcher
-and pipes a JSON payload to stdin.  We route on hook_event_name,
-update state, and (for PreToolUse) potentially block-and-poll for
-dashboard approval.
+and pipes a JSON payload to stdin. We route on hook_event_name
+and update session state. This is purely observational — flaude
+does not block or gate permissions. Users approve in their
+Claude terminal as normal.
 """
 
 from __future__ import annotations
 
 import json
 import sys
-import time
-import uuid
-from datetime import datetime, timedelta
 from pathlib import Path
 
 from flaude.constants import (
     ACTIVITY_LOG,
-    DASHBOARD_PID,
-    DEFAULT_APPROVAL_TIMEOUT,
-    NO_DASHBOARD_BEHAVIOR,
-    POLL_INTERVAL,
     ensure_dirs,
     utcnow,
 )
@@ -95,58 +89,6 @@ def _emit_decision(decision: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Blocking approval flow (PreToolUse → ask_dashboard)
-# ---------------------------------------------------------------------------
-
-
-def _handle_ask_dashboard(
-    session_id: str,
-    tool_name: str,
-    tool_input: dict,
-    rule_result,
-    state_manager: StateManager,
-) -> None:
-    request_id = f"req_{uuid.uuid4().hex[:8]}"
-    timeout = rule_result.timeout or DEFAULT_APPROVAL_TIMEOUT
-    timeout_at = utcnow() + timedelta(seconds=timeout)
-
-    # If no dashboard is running, fall back to configured behavior.
-    if not DASHBOARD_PID.exists():
-        behavior = NO_DASHBOARD_BEHAVIOR
-        if behavior == "allow":
-            _emit_decision("allow")
-            return
-        elif behavior == "deny":
-            _emit_decision("deny")
-            return
-        else:  # "passthrough"
-            sys.exit(0)
-
-    # Register the pending permission so the TUI can display it.
-    state_manager.add_pending_permission(
-        session_id=session_id,
-        request_id=request_id,
-        tool_name=tool_name,
-        tool_input=tool_input,
-        rule_matched=rule_result.rule_name,
-        timeout_at=timeout_at,
-    )
-
-    # Block and poll for a decision file from the dashboard.
-    while utcnow() < timeout_at:
-        result = state_manager.read_decision(session_id, request_id)
-        if result is not None:
-            state_manager.resolve_permission(session_id, request_id)
-            _emit_decision(result["decision"])
-            return
-        time.sleep(POLL_INTERVAL)
-
-    # Timeout reached — clean up and deny.
-    state_manager.resolve_permission(session_id, request_id)
-    _emit_decision("deny")
-
-
-# ---------------------------------------------------------------------------
 # Per-event handlers
 # ---------------------------------------------------------------------------
 
@@ -174,7 +116,6 @@ def _handle_pre_tool_use(event: dict, sm: StateManager) -> None:
 
     state = sm.load_session(session_id)
     if state is None:
-        # Session state missing (e.g. hook installed mid-session). Bootstrap.
         state = SessionState(
             session_id=session_id,
             cwd=event.get("cwd", ""),
@@ -185,24 +126,22 @@ def _handle_pre_tool_use(event: dict, sm: StateManager) -> None:
     summary = _summarize_tool(tool_name, tool_input)
     state.last_tool = LastTool(name=tool_name, summary=summary, at=now)
     state.tool_stats[tool_name] = state.tool_stats.get(tool_name, 0) + 1
+    state.status = SessionStatus.WORKING
     state.last_event = "PreToolUse"
     state.last_event_at = now
     sm.save_session(state)
 
-    # Evaluate rules
+    _log(session_id, "PreToolUse", f'{tool_name} "{summary}"')
+
+    # Only hard-deny dangerous commands. Everything else passes through
+    # to Claude Code's normal permission flow.
     engine = RulesEngine.load()
     result = engine.evaluate(tool_name, tool_input, state.cwd)
 
-    _log(session_id, "PreToolUse", f'{tool_name} "{summary}"')
-
-    if result.action == "allow":
-        _emit_decision("allow")
-    elif result.action == "deny":
+    if result.action == "deny":
         _emit_decision("deny")
-    elif result.action == "ask_dashboard":
-        _handle_ask_dashboard(session_id, tool_name, tool_input, result, sm)
-    # "no_match" — fall through to Claude Code's own prompt
-    sys.exit(0)
+    # All other actions (allow, ask_dashboard, no_match) → fall through
+    # to Claude Code's own permission handling.
 
 
 def _handle_post_tool_use(event: dict, sm: StateManager) -> None:
@@ -225,7 +164,6 @@ def _handle_stop(event: dict, sm: StateManager) -> None:
     state = sm.load_session(session_id)
     if state is None:
         return
-    # Only go idle if we're not waiting on something interactive.
     if state.status not in (
         SessionStatus.WAITING_PERMISSION,
         SessionStatus.WAITING_ANSWER,

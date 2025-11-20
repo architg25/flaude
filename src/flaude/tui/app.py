@@ -22,9 +22,6 @@ class FlaudeApp(App):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("y", "approve", "Approve", show=True),
-        Binding("n", "deny", "Deny", show=True),
-        Binding("a", "approve_all", "Approve All"),
         Binding("g", "goto_session", "Go To"),
         Binding("question_mark", "help", "Help"),
     ]
@@ -48,7 +45,6 @@ class FlaudeApp(App):
 
     def _refresh_state(self) -> None:
         sessions = self._mgr.load_all_sessions()
-        # Filter out ended sessions older than 5 minutes for display
         active = {
             sid: s for sid, s in sessions.items() if s.status != SessionStatus.ENDED
         }
@@ -60,40 +56,19 @@ class FlaudeApp(App):
         log.set_session_filter(table.get_selected_session_id())
         log.refresh_log()
 
-        # Update title with counts
-        pending = sum(len(s.pending_permissions) for s in active.values())
-        if pending:
-            self.title = f"flaude ({len(active)} sessions, {pending} pending)"
+        waiting = sum(
+            1
+            for s in active.values()
+            if s.status
+            in (SessionStatus.WAITING_PERMISSION, SessionStatus.WAITING_ANSWER)
+        )
+        if waiting:
+            self.title = f"flaude ({len(active)} sessions, {waiting} waiting)"
         else:
             self.title = f"flaude ({len(active)} sessions)"
 
     def _cleanup(self) -> None:
         cleanup_stale_sessions(self._mgr)
-
-    def action_approve(self) -> None:
-        panel = self.query_one(PermissionPanel)
-        if panel.approve_selected(self._mgr):
-            self.notify("Approved", severity="information")
-            self._refresh_state()
-        else:
-            self.notify("Nothing to approve", severity="warning")
-
-    def action_deny(self) -> None:
-        panel = self.query_one(PermissionPanel)
-        if panel.deny_selected(self._mgr):
-            self.notify("Denied", severity="warning")
-            self._refresh_state()
-        else:
-            self.notify("Nothing to deny", severity="warning")
-
-    def action_approve_all(self) -> None:
-        panel = self.query_one(PermissionPanel)
-        count = panel.approve_all(self._mgr)
-        if count:
-            self.notify(f"Approved {count} permissions", severity="information")
-            self._refresh_state()
-        else:
-            self.notify("Nothing to approve", severity="warning")
 
     def action_goto_session(self) -> None:
         table = self.query_one(SessionTable)
@@ -110,7 +85,6 @@ class FlaudeApp(App):
         if navigate_to_session(self._terminal, state.cwd):
             self.notify(f"Switched to {session_id[:8]}")
         else:
-            # Fallback: show resume command
             self.notify(
                 f"Could not switch. Resume with: claude --resume {session_id}",
                 severity="warning",
@@ -119,6 +93,6 @@ class FlaudeApp(App):
 
     def action_help(self) -> None:
         self.notify(
-            "[y] Approve  [n] Deny  [a] Approve All  " "[g] Go to session  [q] Quit",
+            "[g] Go to session  [q] Quit",
             timeout=10,
         )
