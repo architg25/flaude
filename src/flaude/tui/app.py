@@ -40,6 +40,12 @@ class FlaudeApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        # Set terminal window/tab title
+        import sys
+
+        sys.stdout.write("\033]0;flaude\007")
+        sys.stdout.flush()
+
         self.set_interval(1.0, self._refresh_state)
         self.set_interval(30.0, self._cleanup)
         self._refresh_state()
