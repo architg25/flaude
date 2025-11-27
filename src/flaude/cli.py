@@ -172,14 +172,19 @@ def cmd_run(args: argparse.Namespace) -> None:
     sys.stdout.write("\033]1;flaude\007\033]2;flaude\007")
     sys.stdout.flush()
 
-    # Set process title so terminals that show process name display "flaude"
+    # Set process title so iTerm2 shows "flaude" instead of "python3.13"
     try:
-        import ctypes
+        from setproctitle import setproctitle
 
-        libc = ctypes.cdll.LoadLibrary("libc.dylib")
-        libc.setprogname(b"flaude")
-    except Exception:
-        pass
+        setproctitle("flaude")
+    except ImportError:
+        try:
+            import ctypes
+
+            libc = ctypes.cdll.LoadLibrary("libc.dylib")
+            libc.setprogname(b"flaude")
+        except Exception:
+            pass
 
     # Write PID file
     DASHBOARD_PID.write_text(str(os.getpid()))
