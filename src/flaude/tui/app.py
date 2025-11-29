@@ -40,8 +40,6 @@ class FlaudeApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.console.set_window_title("flaude")
-
         self.set_interval(1.0, self._refresh_state)
         self.set_interval(30.0, self._cleanup)
         self._refresh_state()

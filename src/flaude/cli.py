@@ -167,24 +167,14 @@ def cmd_run(args: argparse.Namespace) -> None:
     """Launch the TUI dashboard."""
     ensure_dirs()
 
-    # Set terminal tab/window title before Textual takes over
-    # OSC 1 = icon/tab name, OSC 2 = window title
-    sys.stdout.write("\033]1;flaude\007\033]2;flaude\007")
-    sys.stdout.flush()
-
-    # Set process title so iTerm2 shows "flaude" instead of "python3.13"
+    # Overwrite process name from "python3.13" to "flaude".
+    # iTerm2 shows this as the tab title automatically.
     try:
         from setproctitle import setproctitle
 
         setproctitle("flaude")
     except ImportError:
-        try:
-            import ctypes
-
-            libc = ctypes.cdll.LoadLibrary("libc.dylib")
-            libc.setprogname(b"flaude")
-        except Exception:
-            pass
+        pass
 
     # Write PID file
     DASHBOARD_PID.write_text(str(os.getpid()))
