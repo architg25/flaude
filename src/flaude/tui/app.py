@@ -7,7 +7,6 @@ from textual.widgets import Header, Footer
 from flaude.state.manager import StateManager
 from flaude.state.models import SessionStatus
 from flaude.state.cleanup import cleanup_stale_sessions
-from flaude.terminal.detect import detect_terminal
 from flaude.terminal.navigate import navigate_to_session
 from flaude.tui.widgets.session_table import SessionTable
 from flaude.tui.widgets.permission_panel import PermissionPanel
@@ -30,7 +29,6 @@ class FlaudeApp(App):
     def __init__(self) -> None:
         super().__init__()
         self._mgr = StateManager()
-        self._terminal = detect_terminal()
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -83,7 +81,7 @@ class FlaudeApp(App):
             self.notify("Session not found", severity="error")
             return
 
-        if navigate_to_session(self._terminal, state.cwd):
+        if navigate_to_session(state.terminal, state.cwd):
             self.notify(f"Switched to {session_id[:8]}")
         else:
             self.notify(

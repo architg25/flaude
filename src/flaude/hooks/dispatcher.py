@@ -10,6 +10,7 @@ Claude terminal as normal.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -89,6 +90,24 @@ def _emit_decision(decision: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Terminal detection (runs inside the Claude session's terminal)
+# ---------------------------------------------------------------------------
+
+_TERM_PROGRAM_MAP = {
+    "iTerm.app": "iTerm2",
+    "ghostty": "Ghostty",
+    "Apple_Terminal": "Terminal",
+    "WarpTerminal": "Warp",
+}
+
+
+def _detect_terminal_from_env() -> str | None:
+    """Detect terminal from TERM_PROGRAM env var (set by the terminal emulator)."""
+    term = os.environ.get("TERM_PROGRAM", "")
+    return _TERM_PROGRAM_MAP.get(term)
+
+
+# ---------------------------------------------------------------------------
 # Per-event handlers
 # ---------------------------------------------------------------------------
 
@@ -100,6 +119,7 @@ def _handle_session_start(event: dict, sm: StateManager) -> None:
         session_id=session_id,
         cwd=event.get("cwd", ""),
         permission_mode=event.get("permission_mode", "default"),
+        terminal=_detect_terminal_from_env(),
         started_at=now,
         last_event="SessionStart",
         last_event_at=now,
