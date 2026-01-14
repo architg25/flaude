@@ -9,7 +9,7 @@ KNOWN_TERMINALS = [
     ("iTerm2", "iTerm2"),
     ("Ghostty", "Ghostty"),
     ("Terminal", "Terminal"),
-    ("WezTerm", "WezTerm"),
+    ("Warp", "Warp"),
 ]
 
 

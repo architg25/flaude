@@ -176,4 +176,11 @@ def _build_script(terminal: str, cwd: str) -> str | None:
         return "false"
         """
 
+    if terminal == "Warp":
+        # Warp has no AppleScript API — just bring it to the front
+        return """
+        tell application "Warp" to activate
+        return "true"
+        """
+
     return None
