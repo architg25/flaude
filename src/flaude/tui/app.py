@@ -2,11 +2,12 @@
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Header, Footer
+from textual.widgets import Header, Footer, DataTable
 
 from flaude.state.manager import StateManager
 from flaude.state.models import SessionStatus
 from flaude.state.cleanup import cleanup_stale_sessions
+from flaude.terminal.detect import detect_terminal
 from flaude.terminal.navigate import navigate_to_session
 from flaude.tui.widgets.session_table import SessionTable
 from flaude.tui.widgets.permission_panel import PermissionPanel
@@ -21,7 +22,6 @@ class FlaudeApp(App):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("enter", "goto_session", "Go To", show=False),
         Binding("g", "goto_session", "Go To"),
         Binding("question_mark", "help", "Help"),
     ]
@@ -29,6 +29,7 @@ class FlaudeApp(App):
     def __init__(self) -> None:
         super().__init__()
         self._mgr = StateManager()
+        self._fallback_terminal = detect_terminal()
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -69,6 +70,10 @@ class FlaudeApp(App):
     def _cleanup(self) -> None:
         cleanup_stale_sessions(self._mgr)
 
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Handle Enter on a session row."""
+        self.action_goto_session()
+
     def action_goto_session(self) -> None:
         table = self.query_one(SessionTable)
         session_id = table.get_selected_session_id()
@@ -81,7 +86,10 @@ class FlaudeApp(App):
             self.notify("Session not found", severity="error")
             return
 
-        if navigate_to_session(state.terminal, state.cwd):
+        # Use per-session terminal if available, fall back to global detection
+        terminal = state.terminal or self._fallback_terminal
+
+        if navigate_to_session(terminal, state.cwd):
             self.notify(f"Switched to {session_id[:8]}")
         else:
             self.notify(
@@ -92,6 +100,6 @@ class FlaudeApp(App):
 
     def action_help(self) -> None:
         self.notify(
-            "[g] Go to session  [q] Quit",
+            "[Enter/g] Go to session  [q] Quit",
             timeout=10,
         )
