@@ -12,13 +12,19 @@ KNOWN_TERMINALS = [
     ("Warp", "Warp"),
 ]
 
-# JetBrains IDE process names
+# JetBrains IDE process names (both display names and actual process names)
 JETBRAINS_IDES = [
+    "idea",
     "IntelliJ IDEA",
+    "pycharm",
     "PyCharm",
+    "webstorm",
     "WebStorm",
+    "goland",
     "GoLand",
+    "phpstorm",
     "PhpStorm",
+    "studio",
     "Android Studio",
 ]
 

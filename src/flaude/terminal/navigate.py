@@ -226,7 +226,10 @@ def _build_script(terminal: str, cwd: str) -> str | None:
                             end try
                         end repeat
                     end tell
-                    tell application (appName as text) to activate
+                    -- Resolve real app name (process "idea" -> app "IntelliJ IDEA")
+                    set appFile to application file of (first process whose name is (appName as text))
+                    set realName to name of appFile
+                    tell application realName to activate
                     return "true"
                 end if
             end repeat
