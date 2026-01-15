@@ -73,12 +73,18 @@ def _navigate_iterm2(cwd: str) -> bool:
 
         resolved_cwd = _get_cwd_for_tty(tty)
         if resolved_cwd and _cwds_match(resolved_cwd, cwd):
-            # Step 3: Select this tab
+            # Step 3: Select this tab and bring window to front
             select_script = f"""
             tell application "iTerm2"
                 set w to window {win_idx}
+                -- Unminimize if needed
+                if miniaturized of w then
+                    set miniaturized of w to false
+                end if
                 set t to tab {tab_idx} of w
                 select t
+                -- Bring window to front
+                set index of w to 1
                 activate
             end tell
             """
@@ -148,37 +154,56 @@ def _build_script(terminal: str, cwd: str) -> str | None:
                 repeat with w in allWindows
                     if name of w contains "{basename}" then
                         perform action "AXRaise" of w
-                        tell application "Ghostty" to activate
-                        return "true"
                     end if
                 end repeat
             end tell
         end tell
-        return "false"
+        tell application "Ghostty"
+            repeat with w in windows
+                if miniaturized of w then
+                    set miniaturized of w to false
+                end if
+            end repeat
+            activate
+        end tell
+        return "true"
         """
 
     if terminal == "Terminal":
         return f"""
         tell application "Terminal"
-            activate
             repeat with w in windows
+                if miniaturized of w then
+                    set miniaturized of w to false
+                end if
                 repeat with t in tabs of w
                     try
                         if custom title of t contains "{basename}" then
                             set selected tab of w to t
                             set index of w to 1
-                            return "true"
                         end if
                     end try
                 end repeat
             end repeat
+            activate
         end tell
-        return "false"
+        return "true"
         """
 
     if terminal == "Warp":
-        # Warp has no AppleScript API — just bring it to the front
+        # Warp has no AppleScript API for tab switching.
+        # Unminimize and bring to front.
         return """
+        tell application "System Events"
+            tell process "Warp"
+                set allWindows to every window
+                repeat with w in allWindows
+                    try
+                        perform action "AXRaise" of w
+                    end try
+                end repeat
+            end tell
+        end tell
         tell application "Warp" to activate
         return "true"
         """
