@@ -24,7 +24,7 @@ class SessionTable(DataTable):
 
     def on_mount(self) -> None:
         self.cursor_type = "row"
-        self.add_columns("ST", "Session", "Project", "Last Tool", "Age", "#")
+        self.add_columns("ST", "Session", "Project", "Term", "Last Tool", "Age", "#")
         self.border_title = "Sessions"
 
     def update_sessions(self, sessions: dict[str, SessionState]) -> None:
@@ -61,10 +61,13 @@ class SessionTable(DataTable):
             age = _format_age(now, state.started_at)
             tool_count = sum(state.tool_stats.values())
 
+            term = state.terminal or "?"
+
             self.add_row(
                 icon,
                 state.session_id[:8],
                 project[:20],
+                term,
                 last_tool[:20],
                 age,
                 str(tool_count),
