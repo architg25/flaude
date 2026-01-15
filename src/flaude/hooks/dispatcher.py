@@ -102,9 +102,14 @@ _TERM_PROGRAM_MAP = {
 
 
 def _detect_terminal_from_env() -> str | None:
-    """Detect terminal from TERM_PROGRAM env var (set by the terminal emulator)."""
+    """Detect terminal from env vars set by the terminal emulator."""
     term = os.environ.get("TERM_PROGRAM", "")
-    return _TERM_PROGRAM_MAP.get(term)
+    if term in _TERM_PROGRAM_MAP:
+        return _TERM_PROGRAM_MAP[term]
+    # JetBrains integrated terminal sets TERMINAL_EMULATOR=JetBrains-JediTerm
+    if "JetBrains" in os.environ.get("TERMINAL_EMULATOR", ""):
+        return "IntelliJ"
+    return None
 
 
 # ---------------------------------------------------------------------------

@@ -3,6 +3,8 @@
 import subprocess
 from pathlib import Path
 
+from flaude.terminal.detect import JETBRAINS_IDES
+
 
 def navigate_to_session(terminal: str | None, cwd: str) -> bool:
     """Switch to the terminal tab whose working directory matches cwd.
@@ -206,6 +208,30 @@ def _build_script(terminal: str, cwd: str) -> str | None:
         end tell
         tell application "Warp" to activate
         return "true"
+        """
+
+    if terminal == "IntelliJ":
+        # Find whichever JetBrains IDE is running and bring it to front.
+        ide_list = ", ".join(f'"{name}"' for name in JETBRAINS_IDES)
+        return f"""
+        tell application "System Events"
+            set jetbrainsApps to {{{ide_list}}}
+            repeat with appName in jetbrainsApps
+                if (name of processes) contains (appName as text) then
+                    tell process (appName as text)
+                        set allWindows to every window
+                        repeat with w in allWindows
+                            try
+                                perform action "AXRaise" of w
+                            end try
+                        end repeat
+                    end tell
+                    tell application (appName as text) to activate
+                    return "true"
+                end if
+            end repeat
+        end tell
+        return "false"
         """
 
     return None
