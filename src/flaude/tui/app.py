@@ -18,7 +18,7 @@ class FlaudeApp(App):
     """Claude Code session manager dashboard."""
 
     CSS_PATH = "app.tcss"
-    TITLE = "flaude"
+    TITLE = "\U0001f916 flaude"
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),

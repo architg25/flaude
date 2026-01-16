@@ -172,7 +172,7 @@ def cmd_run(args: argparse.Namespace) -> None:
     try:
         from setproctitle import setproctitle
 
-        setproctitle("flaude")
+        setproctitle("\U0001f916 flaude")
     except ImportError:
         pass
 
