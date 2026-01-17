@@ -218,18 +218,13 @@ def _build_script(terminal: str, cwd: str) -> str | None:
             set jetbrainsApps to {{{ide_list}}}
             repeat with appName in jetbrainsApps
                 if (name of processes) contains (appName as text) then
-                    tell process (appName as text)
-                        set allWindows to every window
-                        repeat with w in allWindows
-                            try
-                                perform action "AXRaise" of w
-                            end try
-                        end repeat
-                    end tell
-                    -- Resolve real app name (process "idea" -> app "IntelliJ IDEA")
                     set appFile to application file of (first process whose name is (appName as text))
                     set realName to name of appFile
-                    tell application realName to activate
+                    -- Force to front
+                    tell process (appName as text)
+                        set frontmost to true
+                    end tell
+                    do shell script "open -a " & quoted form of realName
                     return "true"
                 end if
             end repeat
