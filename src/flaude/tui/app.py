@@ -76,12 +76,6 @@ class FlaudeApp(App):
         except Exception:
             pass
 
-    def action_change_theme(self) -> None:
-        """Open Textual's built-in theme picker."""
-        from textual.command import CommandPalette
-
-        self.action_command_palette()
-
     def _refresh_state(self) -> None:
         sessions = self._mgr.load_all_sessions()
         active = {
