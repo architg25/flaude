@@ -1,9 +1,13 @@
 """Main Textual TUI application."""
 
+import os
+
+import yaml
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Header, Footer, DataTable
 
+from flaude.constants import CONFIG_PATH, DEFAULT_THEME
 from flaude.state.manager import StateManager
 from flaude.state.models import SessionStatus
 from flaude.state.cleanup import cleanup_stale_sessions
@@ -12,6 +16,24 @@ from flaude.terminal.navigate import navigate_to_session
 from flaude.tui.widgets.session_table import SessionTable
 from flaude.tui.widgets.permission_panel import PermissionPanel
 from flaude.tui.widgets.activity_log import ActivityLog
+
+
+def _load_config() -> dict:
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH) as f:
+                return yaml.safe_load(f) or {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_config(config: dict) -> None:
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = CONFIG_PATH.with_suffix(".yaml.tmp")
+    with open(tmp, "w") as f:
+        yaml.dump(config, f, default_flow_style=False)
+    os.rename(tmp, CONFIG_PATH)
 
 
 class FlaudeApp(App):
@@ -23,6 +45,7 @@ class FlaudeApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("g", "goto_session", "Go To"),
+        Binding("t", "change_theme", "Theme"),
         Binding("question_mark", "help", "Help"),
     ]
 
@@ -30,6 +53,8 @@ class FlaudeApp(App):
         super().__init__()
         self._mgr = StateManager()
         self._fallback_terminal = detect_terminal()
+        self._config = _load_config()
+        self.theme = self._config.get("theme", DEFAULT_THEME)
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -42,6 +67,20 @@ class FlaudeApp(App):
         self.set_interval(1.0, self._refresh_state)
         self.set_interval(30.0, self._cleanup)
         self._refresh_state()
+
+    def watch_theme(self, theme: str) -> None:
+        """Save theme selection whenever it changes."""
+        self._config["theme"] = theme
+        try:
+            _save_config(self._config)
+        except Exception:
+            pass
+
+    def action_change_theme(self) -> None:
+        """Open Textual's built-in theme picker."""
+        from textual.command import CommandPalette
+
+        self.action_command_palette()
 
     def _refresh_state(self) -> None:
         sessions = self._mgr.load_all_sessions()
@@ -86,7 +125,6 @@ class FlaudeApp(App):
             self.notify("Session not found", severity="error")
             return
 
-        # Use per-session terminal if available, fall back to global detection
         terminal = state.terminal or self._fallback_terminal
 
         if navigate_to_session(terminal, state.cwd):
@@ -100,6 +138,6 @@ class FlaudeApp(App):
 
     def action_help(self) -> None:
         self.notify(
-            "[Enter/g] Go to session  [q] Quit",
+            "[Enter/g] Go to session  [t] Theme  [q] Quit",
             timeout=10,
         )

@@ -25,6 +25,14 @@ RULES_PATH = Path(
 )
 
 CLAUDE_SETTINGS_PATH = Path(os.path.expanduser("~/.claude/settings.json"))
+CONFIG_PATH = Path(
+    os.environ.get(
+        "FLAUDE_CONFIG_PATH",
+        os.path.expanduser("~/.config/flaude/config.yaml"),
+    )
+)
+
+DEFAULT_THEME = "tokyo-night"
 
 STALE_SESSION_TIMEOUT = int(os.environ.get("FLAUDE_STALE_SESSION_TIMEOUT", "1800"))
 TUI_REFRESH_INTERVAL = float(os.environ.get("FLAUDE_TUI_REFRESH_INTERVAL", "1.0"))
