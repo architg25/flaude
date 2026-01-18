@@ -13,6 +13,8 @@ from flaude.state.models import SessionStatus
 from flaude.state.cleanup import cleanup_stale_sessions
 from flaude.terminal.detect import detect_terminal
 from flaude.terminal.navigate import navigate_to_session
+from flaude.terminal.process import kill_session
+from flaude.tui.screens.confirm import ConfirmScreen
 from flaude.tui.widgets.session_table import SessionTable
 from flaude.tui.widgets.permission_panel import PermissionPanel
 from flaude.tui.widgets.activity_log import ActivityLog
@@ -45,6 +47,7 @@ class FlaudeApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("g", "goto_session", "Go To"),
+        Binding("d", "kill_session", "Kill"),
         Binding("t", "change_theme", "Theme"),
         Binding("question_mark", "help", "Help"),
     ]
@@ -130,8 +133,37 @@ class FlaudeApp(App):
                 timeout=10,
             )
 
+    def action_kill_session(self) -> None:
+        table = self.query_one(SessionTable)
+        session_id = table.get_selected_session_id()
+        if not session_id:
+            self.notify("No session selected", severity="warning")
+            return
+
+        state = self._mgr.load_session(session_id)
+        if not state:
+            self.notify("Session not found", severity="error")
+            return
+
+        project = state.cwd.rsplit("/", 1)[-1] if state.cwd else session_id[:8]
+
+        def on_confirm(confirmed: bool) -> None:
+            if not confirmed:
+                return
+            if kill_session(state.cwd):
+                self._mgr.delete_session(session_id)
+                self.notify(f"Killed {project}", severity="information")
+                self._refresh_state()
+            else:
+                self.notify(f"Could not find process for {project}", severity="error")
+
+        self.push_screen(
+            ConfirmScreen(f"Kill session [bold]{project}[/bold]?"),
+            on_confirm,
+        )
+
     def action_help(self) -> None:
         self.notify(
-            "[Enter/g] Go to session  [t] Theme  [q] Quit",
+            "[Enter/g] Go to session  [d] Kill  [t] Theme  [q] Quit",
             timeout=10,
         )
