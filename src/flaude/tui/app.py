@@ -7,9 +7,9 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Header, Footer, DataTable
 
-from flaude.constants import CONFIG_PATH, DEFAULT_THEME
+from flaude.constants import CONFIG_PATH, DEFAULT_THEME, utcnow
 from flaude.state.manager import StateManager
-from flaude.state.models import SessionStatus
+from flaude.state.models import SessionState, SessionStatus
 from flaude.state.cleanup import cleanup_stale_sessions
 from flaude.terminal.detect import detect_terminal
 from flaude.terminal.navigate import navigate_to_session
@@ -36,6 +36,30 @@ def _save_config(config: dict) -> None:
     with open(tmp, "w") as f:
         yaml.dump(config, f, default_flow_style=False)
     os.rename(tmp, CONFIG_PATH)
+
+
+def _build_kill_message(state: SessionState) -> str:
+    project = state.cwd.rsplit("/", 1)[-1] if state.cwd else "?"
+    terminal = state.terminal or "?"
+    status = state.status.value
+    tools = sum(state.tool_stats.values())
+    now = utcnow()
+    delta = now - state.started_at
+    minutes = int(delta.total_seconds() // 60)
+    if minutes < 60:
+        age = f"{minutes}m"
+    else:
+        age = f"{minutes // 60}h{minutes % 60}m"
+
+    return (
+        f"[bold $warning]Kill this session?[/]\n\n"
+        f"  Project:  [bold]{project}[/]\n"
+        f"  Session:  {state.session_id[:8]}\n"
+        f"  Terminal: {terminal}\n"
+        f"  Status:   {status}\n"
+        f"  Age:      {age}\n"
+        f"  Tools:    {tools}"
+    )
 
 
 class FlaudeApp(App):
@@ -145,11 +169,12 @@ class FlaudeApp(App):
             self.notify("Session not found", severity="error")
             return
 
-        project = state.cwd.rsplit("/", 1)[-1] if state.cwd else session_id[:8]
+        message = _build_kill_message(state)
 
         def on_confirm(confirmed: bool) -> None:
             if not confirmed:
                 return
+            project = state.cwd.rsplit("/", 1)[-1] if state.cwd else session_id[:8]
             if kill_session(state.cwd):
                 self._mgr.delete_session(session_id)
                 self.notify(f"Killed {project}", severity="information")
@@ -157,10 +182,7 @@ class FlaudeApp(App):
             else:
                 self.notify(f"Could not find process for {project}", severity="error")
 
-        self.push_screen(
-            ConfirmScreen(f"Kill session [bold]{project}[/bold]?"),
-            on_confirm,
-        )
+        self.push_screen(ConfirmScreen(message), on_confirm)
 
     def action_help(self) -> None:
         self.notify(
