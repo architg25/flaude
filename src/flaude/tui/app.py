@@ -175,7 +175,7 @@ class FlaudeApp(App):
             if not confirmed:
                 return
             project = state.cwd.rsplit("/", 1)[-1] if state.cwd else session_id[:8]
-            if kill_session(state.cwd):
+            if kill_session(session_id):
                 self._mgr.delete_session(session_id)
                 self.notify(f"Killed {project}", severity="information")
                 self._refresh_state()
