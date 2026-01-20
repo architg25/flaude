@@ -189,11 +189,11 @@ def _handle_stop(event: dict, sm: StateManager) -> None:
     state = sm.load_session(session_id)
     if state is None:
         return
-    state.status = SessionStatus.WAITING_ANSWER
+    state.status = SessionStatus.IDLE
     state.last_event = "Stop"
     state.last_event_at = utcnow()
     sm.save_session(state)
-    _log(session_id, "Stop", "waiting")
+    _log(session_id, "Stop", "idle")
 
 
 def _handle_notification(event: dict, sm: StateManager) -> None:
@@ -206,7 +206,7 @@ def _handle_notification(event: dict, sm: StateManager) -> None:
 
     if "permission" in message:
         state.status = SessionStatus.WAITING_PERMISSION
-    elif any(kw in message for kw in ("question", "input", "answer")):
+    elif "needs your attention" in message:
         state.status = SessionStatus.WAITING_ANSWER
 
     state.last_event = "Notification"
