@@ -24,7 +24,7 @@ class SessionTable(DataTable):
 
     def on_mount(self) -> None:
         self.cursor_type = "row"
-        self.add_columns("ST", "Session", "Project", "Term", "Last Tool", "Age", "#")
+        self.add_columns("ST", "Session", "Project", "Term", "Age", "#")
         self.border_title = "Sessions"
 
     def update_sessions(self, sessions: dict[str, SessionState]) -> None:
@@ -55,12 +55,8 @@ class SessionTable(DataTable):
         for idx, state in enumerate(sorted_sessions):
             icon, css_class = STATUS_ICONS.get(state.status, ("?", "status-idle"))
             project = Path(state.cwd).name if state.cwd else "?"
-            last_tool = state.last_tool.name if state.last_tool else "-"
-            if state.last_tool and state.last_tool.summary:
-                last_tool = f"{state.last_tool.name}:{state.last_tool.summary[:12]}"
             age = _format_age(now, state.started_at)
             tool_count = sum(state.tool_stats.values())
-
             term = state.terminal or "?"
 
             self.add_row(
@@ -68,7 +64,6 @@ class SessionTable(DataTable):
                 state.session_id[:8],
                 project[:20],
                 term,
-                last_tool[:20],
                 age,
                 str(tool_count),
                 key=state.session_id,

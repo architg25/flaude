@@ -227,12 +227,14 @@ def _handle_user_prompt_submit(event: dict, sm: StateManager) -> None:
     state = sm.load_session(session_id)
     if state is None:
         return
+    prompt = event.get("user_prompt", "")
     state.status = SessionStatus.WORKING
+    state.last_prompt = prompt[:200] if prompt else state.last_prompt
     state.pending_question = None
     state.last_event = "UserPromptSubmit"
     state.last_event_at = utcnow()
     sm.save_session(state)
-    _log(session_id, "UserPromptSubmit")
+    _log(session_id, "UserPrompt", _trunc(prompt, 80) if prompt else "")
 
 
 def _handle_subagent_stop(event: dict, sm: StateManager) -> None:
