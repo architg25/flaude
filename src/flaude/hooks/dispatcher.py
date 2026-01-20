@@ -154,6 +154,12 @@ def _handle_pre_tool_use(event: dict, sm: StateManager) -> None:
     state.status = SessionStatus.WORKING
     state.last_event = "PreToolUse"
     state.last_event_at = now
+
+    if tool_name == "AskUserQuestion":
+        state.pending_question = tool_input
+    else:
+        state.pending_question = None
+
     sm.save_session(state)
 
     _log(session_id, "PreToolUse", f'{tool_name} "{summary}"')
@@ -222,6 +228,7 @@ def _handle_user_prompt_submit(event: dict, sm: StateManager) -> None:
     if state is None:
         return
     state.status = SessionStatus.WORKING
+    state.pending_question = None
     state.last_event = "UserPromptSubmit"
     state.last_event_at = utcnow()
     sm.save_session(state)

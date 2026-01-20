@@ -42,6 +42,7 @@ class SessionState(BaseModel):
     tool_stats: dict[str, int] = {}
     last_tool: LastTool | None = None
     pending_permissions: list[PendingPermission] = []
+    pending_question: dict | None = None
     terminal: str | None = None
     error_count: int = 0
     subagent_count: int = 0

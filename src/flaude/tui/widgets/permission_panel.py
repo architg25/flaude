@@ -1,5 +1,7 @@
 """Waiting sessions panel — shows which sessions need attention."""
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Static, ListView, ListItem
@@ -16,19 +18,24 @@ class WaitingItem(ListItem):
         self._state = state
 
     def compose(self) -> ComposeResult:
-        status = (
-            "Permission"
-            if self._state.status == SessionStatus.WAITING_PERMISSION
-            else "Input"
-        )
-        tool_info = ""
-        if self._state.last_tool:
-            tool_info = (
-                f" — {self._state.last_tool.name}: {self._state.last_tool.summary}"
-            )
-        yield Static(
-            f"[bold][{self.session_id[:8]}][/bold] Waiting for {status}{tool_info}"
-        )
+        project = Path(self._state.cwd).name if self._state.cwd else "?"
+        if self._state.status == SessionStatus.WAITING_PERMISSION:
+            label = "Permission"
+        else:
+            label = "Input"
+
+        yield Static(f"[bold][{self.session_id[:8]}][/bold] {project} — {label}")
+
+        # Show AskUserQuestion details if available
+        pq = self._state.pending_question
+        if pq and "questions" in pq:
+            for q in pq["questions"]:
+                question_text = q.get("question", "")
+                yield Static(f"  [italic]{question_text}[/]")
+                options = q.get("options", [])
+                if options:
+                    labels = [o.get("label", "") for o in options]
+                    yield Static("  " + "  ".join(f"[bold]{l}[/]" for l in labels))
 
 
 class PermissionPanel(Vertical):
