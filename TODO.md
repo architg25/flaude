@@ -21,3 +21,16 @@ Need a reliable way to terminate a Claude Code session from the flaude TUI.
 - `d` keybind on session table
 - Confirmation dialog with session details (project, ID, terminal, status, age, tools)
 - `ConfirmScreen` modal (y/n/Esc)
+
+## Send prompt to session from dashboard
+
+Type a message in flaude and have it sent to a selected Claude session as if typed in the terminal.
+
+**Problem:** Claude Code reads from stdin in its own terminal. We don't own that stdin, so there's no clean way to inject a prompt into a running session.
+
+**Possible approaches:**
+
+- Wait for Claude Code to add a `claude send <session-id> <prompt>` API
+- Keystroke injection via AppleScript to iTerm2 (fragile, single-line only, iTerm2-only)
+- Navigate + clipboard: copy prompt to clipboard, switch to the terminal, user pastes
+- File-based messaging with a custom hook (no hook event fires while waiting for input)
