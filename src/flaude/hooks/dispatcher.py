@@ -155,7 +155,7 @@ def _handle_pre_tool_use(event: dict, sm: StateManager) -> None:
     state.last_event = "PreToolUse"
     state.last_event_at = now
 
-    if tool_name == "AskUserQuestion":
+    if tool_name in ("AskUserQuestion", "ExitPlanMode"):
         state.pending_question = tool_input
     else:
         state.pending_question = None

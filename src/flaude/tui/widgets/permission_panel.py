@@ -26,16 +26,20 @@ class WaitingItem(ListItem):
 
         yield Static(f"[bold][{self.session_id[:8]}][/bold] {project} — {label}")
 
-        # Show AskUserQuestion details if available
+        # Show question details if available
         pq = self._state.pending_question
-        if pq and "questions" in pq:
-            for q in pq["questions"]:
-                question_text = q.get("question", "")
-                yield Static(f"  [italic]{question_text}[/]")
-                options = q.get("options", [])
-                if options:
-                    labels = [o.get("label", "") for o in options]
-                    yield Static("  " + "  ".join(f"[bold]{l}[/]" for l in labels))
+        if pq:
+            if "questions" in pq:
+                for q in pq["questions"]:
+                    question_text = q.get("question", "")
+                    yield Static(f"  [italic]{question_text}[/]")
+                    options = q.get("options", [])
+                    if options:
+                        labels = [o.get("label", "") for o in options]
+                        yield Static("  " + "  ".join(f"[bold]{l}[/]" for l in labels))
+            else:
+                # ExitPlanMode or similar — no questions array
+                yield Static("  [italic]Plan approval needed[/]")
 
 
 class PermissionPanel(Vertical):
