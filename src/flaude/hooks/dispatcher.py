@@ -124,6 +124,7 @@ def _handle_session_start(event: dict, sm: StateManager) -> None:
         session_id=session_id,
         cwd=event.get("cwd", ""),
         permission_mode=event.get("permission_mode", "default"),
+        transcript_path=event.get("transcript_path"),
         terminal=_detect_terminal_from_env(),
         started_at=now,
         last_event="SessionStart",
@@ -144,9 +145,14 @@ def _handle_pre_tool_use(event: dict, sm: StateManager) -> None:
         state = SessionState(
             session_id=session_id,
             cwd=event.get("cwd", ""),
+            transcript_path=event.get("transcript_path"),
             started_at=now,
             last_event_at=now,
         )
+
+    # Backfill transcript_path if missing (session started before hooks)
+    if not state.transcript_path and event.get("transcript_path"):
+        state.transcript_path = event["transcript_path"]
 
     summary = _summarize_tool(tool_name, tool_input)
     state.last_tool = LastTool(name=tool_name, summary=summary, at=now)

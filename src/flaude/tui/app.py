@@ -45,6 +45,7 @@ class FlaudeApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("g", "goto_session", "Go To"),
+        Binding("l", "cycle_log_mode", "Log Mode"),
         Binding("t", "change_theme", "Theme"),
         Binding("question_mark", "help", "Help"),
     ]
@@ -86,7 +87,13 @@ class FlaudeApp(App):
         self.query_one(PermissionPanel).update_permissions(active)
 
         log = self.query_one(ActivityLog)
-        log.set_session_filter(table.get_selected_session_id())
+        selected_id = table.get_selected_session_id()
+        log.set_session_filter(selected_id)
+        # Pass transcript path for the selected session
+        if selected_id and selected_id in active:
+            log.set_transcript_path(active[selected_id].transcript_path)
+        else:
+            log.set_transcript_path(None)
         log.refresh_log()
 
         waiting = sum(
@@ -130,8 +137,11 @@ class FlaudeApp(App):
                 timeout=10,
             )
 
+    def action_cycle_log_mode(self) -> None:
+        self.query_one(ActivityLog).cycle_mode()
+
     def action_help(self) -> None:
         self.notify(
-            "[Enter/g] Go to session  [t] Theme  [q] Quit",
+            "[Enter/g] Go to session  [l] Log mode  [t] Theme  [q] Quit",
             timeout=10,
         )
