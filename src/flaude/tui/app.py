@@ -147,6 +147,9 @@ class FlaudeApp(App):
             _save_config(self._config)
         except Exception:
             pass
+        from flaude.tui.widgets.activity_log import MODE_LABELS
+
+        self.notify(f"Log: {MODE_LABELS[log._mode]}")
 
     def action_help(self) -> None:
         self.notify(
