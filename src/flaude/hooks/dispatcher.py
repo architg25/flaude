@@ -157,6 +157,7 @@ def _handle_pre_tool_use(event: dict, sm: StateManager) -> None:
 
     if tool_name in ("AskUserQuestion", "ExitPlanMode"):
         state.pending_question = tool_input
+        state.status = SessionStatus.WAITING_ANSWER
     else:
         state.pending_question = None
 
