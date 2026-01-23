@@ -14,9 +14,9 @@ MODE_LABELS = {"all": "All", "summary": "Summary", "tools": "Tools"}
 class ActivityLog(RichLog):
     """Tails the session transcript or activity log with configurable detail level."""
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, initial_mode: str = "tools", **kwargs) -> None:
         super().__init__(highlight=True, markup=True, max_lines=500, **kwargs)
-        self._mode: str = "summary"
+        self._mode: str = initial_mode if initial_mode in MODES else "tools"
         self._session_filter: str | None = None
         self._transcript_path: str | None = None
         # Track file position for incremental reads

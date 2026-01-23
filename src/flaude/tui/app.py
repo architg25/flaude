@@ -61,7 +61,9 @@ class FlaudeApp(App):
         yield Header()
         yield SessionTable(id="session-table")
         yield PermissionPanel(id="permission-panel")
-        yield ActivityLog(id="activity-log")
+        yield ActivityLog(
+            initial_mode=self._config.get("log_mode", "tools"), id="activity-log"
+        )
         yield Footer()
 
     def on_mount(self) -> None:
@@ -138,7 +140,13 @@ class FlaudeApp(App):
             )
 
     def action_cycle_log_mode(self) -> None:
-        self.query_one(ActivityLog).cycle_mode()
+        log = self.query_one(ActivityLog)
+        log.cycle_mode()
+        self._config["log_mode"] = log._mode
+        try:
+            _save_config(self._config)
+        except Exception:
+            pass
 
     def action_help(self) -> None:
         self.notify(
