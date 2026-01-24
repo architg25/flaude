@@ -12,7 +12,9 @@ from flaude.state.manager import StateManager
 from flaude.state.models import SessionStatus
 from flaude.state.cleanup import cleanup_stale_sessions
 from flaude.terminal.detect import detect_terminal
+from flaude.terminal.launch import launch_session
 from flaude.terminal.navigate import navigate_to_session
+from flaude.tui.screens.input_dialog import InputDialog
 from flaude.tui.widgets.session_table import SessionTable
 from flaude.tui.widgets.permission_panel import PermissionPanel
 from flaude.tui.widgets.activity_log import ActivityLog
@@ -45,6 +47,7 @@ class FlaudeApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("g", "goto_session", "Go To"),
+        Binding("n", "new_session", "New"),
         Binding("l", "cycle_log_mode", "Log Mode"),
         Binding("t", "change_theme", "Theme"),
         Binding("question_mark", "help", "Help"),
@@ -139,6 +142,29 @@ class FlaudeApp(App):
                 timeout=10,
             )
 
+    def action_new_session(self) -> None:
+        table = self.query_one(SessionTable)
+        session_id = table.get_selected_session_id()
+        default_cwd = "~"
+        if session_id:
+            state = self._mgr.load_session(session_id)
+            if state and state.cwd:
+                default_cwd = state.cwd
+
+        def on_result(path: str | None) -> None:
+            if not path:
+                return
+            terminal = self._fallback_terminal
+            if launch_session(terminal, path):
+                self.notify(f"Launched claude in {path.rsplit('/', 1)[-1]}")
+            else:
+                self.notify(
+                    f"Could not open terminal ({terminal or 'unknown'})",
+                    severity="error",
+                )
+
+        self.push_screen(InputDialog("New session directory:", default_cwd), on_result)
+
     def action_cycle_log_mode(self) -> None:
         log = self.query_one(ActivityLog)
         log.cycle_mode()
@@ -153,6 +179,6 @@ class FlaudeApp(App):
 
     def action_help(self) -> None:
         self.notify(
-            "[Enter/g] Go to session  [l] Log mode  [t] Theme  [q] Quit",
+            "[Enter/g] Go to  [n] New  [l] Log mode  [t] Theme  [q] Quit",
             timeout=10,
         )
