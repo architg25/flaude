@@ -113,6 +113,35 @@ def _detect_terminal_from_env() -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Session loading helper
+# ---------------------------------------------------------------------------
+
+
+def _load_or_create(event: dict, sm: StateManager) -> SessionState:
+    """Load session state, creating if missing, and backfill fields from event."""
+    session_id = event.get("session_id", "")
+    state = sm.load_session(session_id)
+    if state is None:
+        now = utcnow()
+        state = SessionState(
+            session_id=session_id,
+            cwd=event.get("cwd", ""),
+            transcript_path=event.get("transcript_path"),
+            terminal=_detect_terminal_from_env(),
+            started_at=now,
+            last_event_at=now,
+        )
+    # Backfill any missing fields from event data
+    if not state.transcript_path and event.get("transcript_path"):
+        state.transcript_path = event["transcript_path"]
+    if not state.cwd and event.get("cwd"):
+        state.cwd = event["cwd"]
+    if not state.terminal:
+        state.terminal = _detect_terminal_from_env()
+    return state
+
+
+# ---------------------------------------------------------------------------
 # Per-event handlers
 # ---------------------------------------------------------------------------
 
@@ -135,24 +164,11 @@ def _handle_session_start(event: dict, sm: StateManager) -> None:
 
 
 def _handle_pre_tool_use(event: dict, sm: StateManager) -> None:
-    session_id = event.get("session_id", "")
     tool_name = event.get("tool_name", "")
     tool_input = event.get("tool_input", {})
     now = utcnow()
 
-    state = sm.load_session(session_id)
-    if state is None:
-        state = SessionState(
-            session_id=session_id,
-            cwd=event.get("cwd", ""),
-            transcript_path=event.get("transcript_path"),
-            started_at=now,
-            last_event_at=now,
-        )
-
-    # Backfill transcript_path if missing (session started before hooks)
-    if not state.transcript_path and event.get("transcript_path"):
-        state.transcript_path = event["transcript_path"]
+    state = _load_or_create(event, sm)
 
     summary = _summarize_tool(tool_name, tool_input)
     state.last_tool = LastTool(name=tool_name, summary=summary, at=now)
@@ -169,7 +185,7 @@ def _handle_pre_tool_use(event: dict, sm: StateManager) -> None:
 
     sm.save_session(state)
 
-    _log(session_id, "PreToolUse", f'{tool_name} "{summary}"')
+    _log(state.session_id, "PreToolUse", f'{tool_name} "{summary}"')
 
     # Only hard-deny dangerous commands. Everything else passes through
     # to Claude Code's normal permission flow.
@@ -178,44 +194,29 @@ def _handle_pre_tool_use(event: dict, sm: StateManager) -> None:
 
     if result.action == "deny":
         _emit_decision("deny")
-    # All other actions (allow, ask_dashboard, no_match) → fall through
-    # to Claude Code's own permission handling.
 
 
 def _handle_post_tool_use(event: dict, sm: StateManager) -> None:
-    session_id = event.get("session_id", "")
     tool_name = event.get("tool_name", "")
-    now = utcnow()
-
-    state = sm.load_session(session_id)
-    if state is None:
-        return
+    state = _load_or_create(event, sm)
     state.last_event = "PostToolUse"
-    state.last_event_at = now
+    state.last_event_at = utcnow()
     sm.save_session(state)
-    _log(session_id, "PostToolUse", tool_name)
+    _log(state.session_id, "PostToolUse", tool_name)
 
 
 def _handle_stop(event: dict, sm: StateManager) -> None:
-    session_id = event.get("session_id", "")
-
-    state = sm.load_session(session_id)
-    if state is None:
-        return
+    state = _load_or_create(event, sm)
     state.status = SessionStatus.IDLE
     state.last_event = "Stop"
     state.last_event_at = utcnow()
     sm.save_session(state)
-    _log(session_id, "Stop", "idle")
+    _log(state.session_id, "Stop", "idle")
 
 
 def _handle_notification(event: dict, sm: StateManager) -> None:
-    session_id = event.get("session_id", "")
     message = event.get("message", "").lower()
-
-    state = sm.load_session(session_id)
-    if state is None:
-        return
+    state = _load_or_create(event, sm)
 
     if "permission" in message:
         state.status = SessionStatus.WAITING_PERMISSION
@@ -225,15 +226,11 @@ def _handle_notification(event: dict, sm: StateManager) -> None:
     state.last_event = "Notification"
     state.last_event_at = utcnow()
     sm.save_session(state)
-    _log(session_id, "Notification", _trunc(message, 60))
+    _log(state.session_id, "Notification", _trunc(message, 60))
 
 
 def _handle_user_prompt_submit(event: dict, sm: StateManager) -> None:
-    session_id = event.get("session_id", "")
-
-    state = sm.load_session(session_id)
-    if state is None:
-        return
+    state = _load_or_create(event, sm)
     prompt = event.get("user_prompt", "")
     state.status = SessionStatus.WORKING
     state.last_prompt = prompt[:200] if prompt else state.last_prompt
@@ -241,20 +238,16 @@ def _handle_user_prompt_submit(event: dict, sm: StateManager) -> None:
     state.last_event = "UserPromptSubmit"
     state.last_event_at = utcnow()
     sm.save_session(state)
-    _log(session_id, "UserPrompt", _trunc(prompt, 80) if prompt else "")
+    _log(state.session_id, "UserPrompt", _trunc(prompt, 80) if prompt else "")
 
 
 def _handle_subagent_stop(event: dict, sm: StateManager) -> None:
-    session_id = event.get("session_id", "")
-
-    state = sm.load_session(session_id)
-    if state is None:
-        return
+    state = _load_or_create(event, sm)
     state.subagent_count = max(0, state.subagent_count - 1)
     state.last_event = "SubagentStop"
     state.last_event_at = utcnow()
     sm.save_session(state)
-    _log(session_id, "SubagentStop")
+    _log(state.session_id, "SubagentStop")
 
 
 def _handle_pre_compact(event: dict, sm: StateManager) -> None:
