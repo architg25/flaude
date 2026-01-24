@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="!/flaude.svg" width="120" alt="flaude">
+</p>
+
 ## flaude
 
 A TUI dashboard for monitoring multiple concurrent Claude Code sessions.
