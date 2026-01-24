@@ -1,7 +1,4 @@
 version: 1
-defaults:
-  approval_timeout: 120
-  no_dashboard_behavior: passthrough
 
 rules:
   - name: safe_reads
@@ -20,17 +17,3 @@ rules:
       command: "(rm\\s+-rf\\s+/[^t]|mkfs|dd\\s+if=)"
     action: deny
     reason: "Extremely dangerous command blocked"
-
-  - name: destructive_commands
-    tools: [Bash]
-    match:
-      command: "(rm\\s+-r|DROP\\s+|DELETE\\s+FROM|git\\s+push\\s+--force)"
-    action: ask_dashboard
-    timeout: 180
-
-  - name: git_push
-    tools: [Bash]
-    match:
-      command: "git\\s+push"
-    action: ask_dashboard
-    timeout: 60

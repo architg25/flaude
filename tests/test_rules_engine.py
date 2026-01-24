@@ -54,37 +54,8 @@ class TestDangerousCommands:
     def test_rm_rf_tmp_not_blocked(self, engine: RulesEngine):
         """rm -rf /tmp should NOT be caught by the dangerous rule (the [^t] exclusion)."""
         result = engine.evaluate("Bash", {"command": "rm -rf /tmp/foo"})
-        # Should fall through to destructive_commands (rm -r pattern)
-        assert result.action == "ask_dashboard"
-        assert result.rule_name == "destructive_commands"
-
-
-class TestDestructiveCommands:
-    """Destructive but not catastrophic commands should require dashboard approval."""
-
-    @pytest.mark.parametrize(
-        "cmd",
-        [
-            "rm -r some_dir",
-            "DROP TABLE users",
-            "DELETE FROM logs",
-            "git push --force origin main",
-        ],
-    )
-    def test_destructive_ask_dashboard(self, engine: RulesEngine, cmd: str):
-        result = engine.evaluate("Bash", {"command": cmd})
-        assert result.action == "ask_dashboard"
-        assert result.timeout == 180
-
-
-class TestGitPush:
-    """Regular git push should require dashboard approval with shorter timeout."""
-
-    def test_git_push_ask_dashboard(self, engine: RulesEngine):
-        result = engine.evaluate("Bash", {"command": "git push origin main"})
-        assert result.action == "ask_dashboard"
-        assert result.rule_name == "git_push"
-        assert result.timeout == 60
+        # No destructive_commands rule anymore -- falls through to no_match
+        assert result.action == "no_match"
 
 
 class TestNoMatch:
@@ -183,8 +154,8 @@ class TestLoadFromYaml:
 
     def test_load_default_yaml(self):
         engine = RulesEngine.load(DEFAULT_YAML)
-        assert len(engine.rules) == 5
-        assert engine.defaults["approval_timeout"] == 120
+        assert len(engine.rules) == 3
+        assert engine.defaults == {}
 
     def test_load_missing_file(self, tmp_path: Path):
         engine = RulesEngine.load(tmp_path / "nonexistent.yaml")

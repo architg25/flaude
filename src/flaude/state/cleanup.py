@@ -33,7 +33,7 @@ def _session_has_process(cwd: str) -> bool:
 
 
 def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
-    """Mark stale sessions as ended. Returns count of cleaned sessions."""
+    """Delete stale sessions. Returns count of cleaned sessions."""
     mgr = mgr or StateManager()
     sessions = mgr.load_all_sessions()
     now = utcnow()
@@ -47,8 +47,7 @@ def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
 
         # Hard timeout: session hasn't reported anything in a long time
         if state.last_event_at < cutoff_stale:
-            state.status = SessionStatus.ENDED
-            mgr.save_session(state)
+            mgr.delete_session(sid)
             cleaned += 1
             continue
 
@@ -58,11 +57,5 @@ def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
                 mgr.delete_session(sid)
                 cleaned += 1
                 continue
-
-        # Resolve timed-out permissions
-        expired = [p for p in state.pending_permissions if p.timeout_at < now]
-        if expired:
-            for p in expired:
-                mgr.resolve_permission(sid, p.request_id)
 
     return cleaned

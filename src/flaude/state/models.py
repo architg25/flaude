@@ -15,15 +15,6 @@ class SessionStatus(str, Enum):
     ENDED = "ended"
 
 
-class PendingPermission(BaseModel):
-    request_id: str
-    tool_name: str
-    tool_input: dict
-    rule_matched: str | None = None
-    created_at: datetime
-    timeout_at: datetime
-
-
 class LastTool(BaseModel):
     name: str
     summary: str
@@ -41,7 +32,6 @@ class SessionState(BaseModel):
     transcript_path: str | None = None
     tool_stats: dict[str, int] = {}
     last_tool: LastTool | None = None
-    pending_permissions: list[PendingPermission] = []
     last_prompt: str | None = None
     pending_question: dict | None = None
     terminal: str | None = None

@@ -12,7 +12,6 @@ def utcnow() -> datetime:
 
 STATE_DIR = Path(os.environ.get("FLAUDE_STATE_DIR", "/tmp/flaude"))
 SESSIONS_DIR = STATE_DIR / "state"
-DECISIONS_DIR = STATE_DIR / "decisions"
 LOGS_DIR = STATE_DIR / "logs"
 ACTIVITY_LOG = LOGS_DIR / "activity.log"
 DASHBOARD_PID = STATE_DIR / "dashboard.pid"
@@ -47,5 +46,5 @@ HOOK_COMMAND = "python3 -m flaude.hooks.dispatcher"
 
 def ensure_dirs() -> None:
     """Create all required directories if they don't exist."""
-    for d in (SESSIONS_DIR, DECISIONS_DIR, LOGS_DIR):
+    for d in (SESSIONS_DIR, LOGS_DIR):
         d.mkdir(parents=True, exist_ok=True)

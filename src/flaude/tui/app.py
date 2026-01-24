@@ -142,14 +142,14 @@ class FlaudeApp(App):
     def action_cycle_log_mode(self) -> None:
         log = self.query_one(ActivityLog)
         log.cycle_mode()
-        self._config["log_mode"] = log._mode
+        self._config["log_mode"] = log.mode
         try:
             _save_config(self._config)
         except Exception:
             pass
         from flaude.tui.widgets.activity_log import MODE_LABELS
 
-        self.notify(f"Log: {MODE_LABELS[log._mode]}")
+        self.notify(f"Log: {MODE_LABELS[log.mode]}")
 
     def action_help(self) -> None:
         self.notify(

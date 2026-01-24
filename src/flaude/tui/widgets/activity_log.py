@@ -23,6 +23,10 @@ class ActivityLog(RichLog):
         self._tools_last_size: int = 0
         self._transcript_last_size: int = 0
 
+    @property
+    def mode(self) -> str:
+        return self._mode
+
     def on_mount(self) -> None:
         self.border_title = f"Activity ({MODE_LABELS[self._mode]})"
 

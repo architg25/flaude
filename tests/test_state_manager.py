@@ -1,6 +1,6 @@
-"""Tests for StateManager — save, load, delete, permissions, decisions."""
+"""Tests for StateManager — save, load, delete."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 
 import pytest
 
@@ -9,7 +9,7 @@ from flaude.state.models import SessionState, SessionStatus
 
 
 def _make_state(session_id: str = "sess-1", **overrides) -> SessionState:
-    now = datetime.now()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     defaults = dict(
         session_id=session_id,
         started_at=now,
@@ -22,10 +22,8 @@ def _make_state(session_id: str = "sess-1", **overrides) -> SessionState:
 @pytest.fixture()
 def mgr(tmp_path):
     sessions_dir = tmp_path / "state"
-    decisions_dir = tmp_path / "decisions"
     sessions_dir.mkdir()
-    decisions_dir.mkdir()
-    return StateManager(sessions_dir=sessions_dir, decisions_dir=decisions_dir)
+    return StateManager(sessions_dir=sessions_dir)
 
 
 # -- save / load roundtrip --
@@ -85,69 +83,6 @@ def test_delete_session(mgr):
 
 def test_delete_nonexistent_is_noop(mgr):
     mgr.delete_session("ghost")  # should not raise
-
-
-# -- pending permissions --
-
-
-def test_add_and_resolve_permission(mgr):
-    mgr.save_session(_make_state("sess-p"))
-    timeout = datetime.now() + timedelta(seconds=120)
-
-    mgr.add_pending_permission(
-        session_id="sess-p",
-        request_id="req-1",
-        tool_name="Bash",
-        tool_input={"command": "rm -rf /"},
-        rule_matched="deny_destructive",
-        timeout_at=timeout,
-    )
-
-    state = mgr.load_session("sess-p")
-    assert len(state.pending_permissions) == 1
-    assert state.pending_permissions[0].request_id == "req-1"
-    assert state.pending_permissions[0].tool_name == "Bash"
-    assert state.pending_permissions[0].rule_matched == "deny_destructive"
-
-    mgr.resolve_permission("sess-p", "req-1")
-
-    state = mgr.load_session("sess-p")
-    assert len(state.pending_permissions) == 0
-
-
-def test_add_permission_to_missing_session_is_noop(mgr):
-    # Should not raise
-    mgr.add_pending_permission(
-        session_id="nope",
-        request_id="req-x",
-        tool_name="Read",
-        tool_input={},
-        rule_matched=None,
-        timeout_at=datetime.now(),
-    )
-
-
-def test_resolve_nonexistent_permission_is_noop(mgr):
-    mgr.save_session(_make_state("sess-r"))
-    mgr.resolve_permission("sess-r", "no-such-req")  # should not raise
-
-
-# -- decisions --
-
-
-def test_write_and_read_decision(mgr):
-    decision = {"action": "allow", "reason": "user approved"}
-    mgr.write_decision("sess-d", "req-1", decision)
-
-    result = mgr.read_decision("sess-d", "req-1")
-    assert result == decision
-
-    # read_decision deletes the file — second read returns None
-    assert mgr.read_decision("sess-d", "req-1") is None
-
-
-def test_read_missing_decision_returns_none(mgr):
-    assert mgr.read_decision("sess-x", "req-x") is None
 
 
 # -- atomic writes --

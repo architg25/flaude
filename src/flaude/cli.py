@@ -26,6 +26,8 @@ HOOK_EVENTS = [
     "SessionStart",
     "SessionEnd",
     "Stop",
+    "SubagentStop",
+    "PreCompact",
     "Notification",
     "UserPromptSubmit",
 ]
@@ -221,10 +223,6 @@ def cmd_status(args: argparse.Namespace) -> None:
                 str(tool_count),
             )
         )
-
-    pending = sum(len(s.pending_permissions) for s in sessions.values())
-    if pending:
-        print(f"\n{pending} pending permission(s)")
 
 
 def main() -> None:

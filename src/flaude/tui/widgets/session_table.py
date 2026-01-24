@@ -1,11 +1,11 @@
 """Session list widget — DataTable of active Claude Code sessions."""
 
 from datetime import datetime
-
-from flaude.constants import utcnow
 from pathlib import Path
 
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable
+
+from flaude.constants import utcnow
 
 from flaude.state.models import SessionState, SessionStatus
 
