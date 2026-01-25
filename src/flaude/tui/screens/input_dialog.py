@@ -55,7 +55,8 @@ class InputDialog(ModalScreen[str | None]):
             yield Input(value=self._default, id="input-field")
             yield Static("", id="suggestions")
             yield Static(
-                "[Tab] Autocomplete  [Enter] Confirm  [Esc] Cancel", id="input-hint"
+                "[bold]Tab[/] Autocomplete  [bold]Enter[/] Confirm  [bold]Esc[/] Cancel",
+                id="input-hint",
             )
 
     def on_mount(self) -> None:
