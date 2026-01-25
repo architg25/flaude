@@ -179,6 +179,6 @@ class FlaudeApp(App):
 
     def action_help(self) -> None:
         self.notify(
-            "[Enter/g] Go to  [n] New  [l] Log mode  [t] Theme  [q] Quit",
+            "[Enter/g] Go to Session  [n] New Claude Session  [l] Log Mode  [t] Theme  [q] Quit",
             timeout=10,
         )
