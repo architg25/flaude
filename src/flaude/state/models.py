@@ -22,6 +22,8 @@ class LastTool(BaseModel):
 
 
 class SessionState(BaseModel):
+    model_config = {"extra": "ignore"}
+
     session_id: str
     status: SessionStatus = SessionStatus.WORKING
     cwd: str = ""

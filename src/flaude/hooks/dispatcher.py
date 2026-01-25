@@ -296,6 +296,6 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
-    except Exception:
-        # A hook crash must NEVER block Claude Code. Swallow and exit clean.
-        pass
+    except Exception as e:
+        # A hook crash must NEVER block Claude Code. Log and exit clean.
+        _log("", "ERROR", str(e))

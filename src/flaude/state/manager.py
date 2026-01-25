@@ -43,11 +43,14 @@ class StateManager:
         )
 
     def load_session(self, session_id: str) -> SessionState | None:
-        """Load a single session. Returns None if the file doesn't exist."""
+        """Load a single session. Returns None if missing or corrupt."""
         path = self._session_path(session_id)
         if not path.exists():
             return None
-        return SessionState.model_validate_json(path.read_text(encoding="utf-8"))
+        try:
+            return SessionState.model_validate_json(path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
 
     def load_all_sessions(self) -> dict[str, SessionState]:
         """Load every *.json in the sessions dir, keyed by session_id."""
