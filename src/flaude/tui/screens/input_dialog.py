@@ -58,8 +58,9 @@ class InputDialog(ModalScreen[str | None]):
             yield Input(value=self._default, id="input-field")
             yield Static("", id="suggestions")
             yield Static(
-                "[bold]Tab[/]/[bold]Enter[/] Select  "
+                "[bold]Tab[/] Autocomplete  "
                 "[bold]Up[/]/[bold]Down[/] Navigate  "
+                "[bold]Enter[/] Confirm  "
                 "[bold]Esc[/] Cancel",
                 id="input-hint",
             )
@@ -72,11 +73,7 @@ class InputDialog(ModalScreen[str | None]):
         self._update_suggestions(event.value)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        # If there are suggestions, accept the selected one
-        if self._current_suggestions:
-            self._accept_selected()
-        else:
-            self.dismiss(event.value.strip() or None)
+        self.dismiss(event.value.strip() or None)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
