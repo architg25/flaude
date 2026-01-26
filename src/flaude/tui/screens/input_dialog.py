@@ -1,4 +1,4 @@
-"""Modal text input dialog with path autocomplete."""
+"""Modal text input dialog with path autocomplete and arrow key selection."""
 
 from pathlib import Path
 
@@ -15,6 +15,8 @@ class InputDialog(ModalScreen[str | None]):
     BINDINGS = [
         Binding("escape", "cancel", "Cancel"),
         Binding("tab", "autocomplete", "Autocomplete", show=False),
+        Binding("down", "select_next", show=False),
+        Binding("up", "select_prev", show=False),
     ]
 
     DEFAULT_CSS = """
@@ -48,6 +50,7 @@ class InputDialog(ModalScreen[str | None]):
         self._label = label
         self._default = default
         self._current_suggestions: list[str] = []
+        self._selected_index: int = 0
 
     def compose(self) -> ComposeResult:
         with Vertical(id="input-dialog"):
@@ -55,7 +58,9 @@ class InputDialog(ModalScreen[str | None]):
             yield Input(value=self._default, id="input-field")
             yield Static("", id="suggestions")
             yield Static(
-                "[bold]Tab[/] Autocomplete  [bold]Enter[/] Confirm  [bold]Esc[/] Cancel",
+                "[bold]Tab[/]/[bold]Enter[/] Select  "
+                "[bold]Up[/]/[bold]Down[/] Navigate  "
+                "[bold]Esc[/] Cancel",
                 id="input-hint",
             )
 
@@ -63,44 +68,77 @@ class InputDialog(ModalScreen[str | None]):
         self._update_suggestions(self._default)
 
     def on_input_changed(self, event: Input.Changed) -> None:
+        self._selected_index = 0
         self._update_suggestions(event.value)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        self.dismiss(event.value.strip() or None)
+        # If there are suggestions, accept the selected one
+        if self._current_suggestions:
+            self._accept_selected()
+        else:
+            self.dismiss(event.value.strip() or None)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
 
+    def action_select_next(self) -> None:
+        if self._current_suggestions:
+            self._selected_index = (self._selected_index + 1) % len(
+                self._current_suggestions
+            )
+            self._render_suggestions()
+
+    def action_select_prev(self) -> None:
+        if self._current_suggestions:
+            self._selected_index = (self._selected_index - 1) % len(
+                self._current_suggestions
+            )
+            self._render_suggestions()
+
     def action_autocomplete(self) -> None:
+        if self._current_suggestions:
+            self._accept_selected()
+
+    def _accept_selected(self) -> None:
         if not self._current_suggestions:
             return
         inp = self.query_one("#input-field", Input)
         text = inp.value
+        selected = self._current_suggestions[self._selected_index]
         path = Path(text).expanduser()
 
         if path.is_dir():
-            # Complete to first child
-            completed = str(Path(text) / self._current_suggestions[0]) + "/"
+            completed = str(Path(text) / selected) + "/"
         else:
-            # Complete the partial name
             parent_str = str(Path(text).parent)
             if parent_str == ".":
-                completed = self._current_suggestions[0] + "/"
+                completed = selected + "/"
             else:
-                completed = parent_str + "/" + self._current_suggestions[0] + "/"
+                completed = parent_str + "/" + selected + "/"
 
         inp.value = completed
         inp.cursor_position = len(completed)
+        self._selected_index = 0
         self._update_suggestions(completed)
 
     def _update_suggestions(self, text: str) -> None:
         self._current_suggestions = self._get_suggestions(text)
+        if self._selected_index >= len(self._current_suggestions):
+            self._selected_index = 0
+        self._render_suggestions()
+
+    def _render_suggestions(self) -> None:
         widget = self.query_one("#suggestions", Static)
-        if self._current_suggestions:
-            display = "  ".join(f"{s}/" for s in self._current_suggestions)
-            widget.update(display)
-        else:
+        if not self._current_suggestions:
             widget.update("")
+            return
+        parts = []
+        for i, name in enumerate(self._current_suggestions):
+            if i == self._selected_index:
+                parts.append(f"[bold reverse] {name}/ [/]")
+            else:
+                parts.append(f"{name}/")
+        widget.update("  ".join(parts))
 
     def _get_suggestions(self, text: str) -> list[str]:
         if not text:
@@ -113,7 +151,6 @@ class InputDialog(ModalScreen[str | None]):
                     for d in path.iterdir()
                     if d.is_dir() and not d.name.startswith(".")
                 )[:8]
-            # Partial name — match siblings
             parent = path.parent
             prefix = path.name
             if parent.is_dir():
