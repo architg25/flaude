@@ -46,8 +46,8 @@ class FlaudeApp(App):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("g", "goto_session", "Go To"),
-        Binding("n", "new_session", "New"),
+        Binding("g", "goto_session", "Go to Session"),
+        Binding("n", "new_session", "New Claude Session"),
         Binding("l", "cycle_log_mode", "Log Mode"),
         Binding("t", "change_theme", "Theme"),
         Binding("question_mark", "help", "Help"),
