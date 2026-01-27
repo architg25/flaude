@@ -24,7 +24,7 @@ class SessionTable(DataTable):
 
     def on_mount(self) -> None:
         self.cursor_type = "row"
-        self.add_columns("ST", "Session", "Project", "Term", "Age", "#")
+        self.add_columns("ST", "Session", "Project", "Term", "Age")
         self.border_title = "Sessions"
 
     def update_sessions(self, sessions: dict[str, SessionState]) -> None:
@@ -56,7 +56,6 @@ class SessionTable(DataTable):
             icon, css_class = STATUS_ICONS.get(state.status, ("?", "status-idle"))
             project = Path(state.cwd).name if state.cwd else "?"
             age = _format_age(now, state.started_at)
-            tool_count = sum(state.tool_stats.values())
             term = state.terminal or "?"
 
             self.add_row(
@@ -65,7 +64,6 @@ class SessionTable(DataTable):
                 project[:20],
                 term,
                 age,
-                str(tool_count),
                 key=state.session_id,
             )
             if state.session_id == selected_key:
