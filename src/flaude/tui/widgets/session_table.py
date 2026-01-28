@@ -10,12 +10,12 @@ from flaude.constants import utcnow
 from flaude.state.models import SessionState, SessionStatus
 
 STATUS_LABELS = {
-    SessionStatus.WORKING: ("Running", "green"),
-    SessionStatus.IDLE: ("Idle", "dim"),
-    SessionStatus.WAITING_PERMISSION: ("Wait", "yellow bold"),
-    SessionStatus.WAITING_ANSWER: ("Wait", "yellow bold"),
-    SessionStatus.ERROR: ("Error", "red bold"),
-    SessionStatus.ENDED: ("Ended", "dim"),
+    SessionStatus.WORKING: ("RUNNING", "green"),
+    SessionStatus.IDLE: ("IDLE", "dim"),
+    SessionStatus.WAITING_PERMISSION: ("WAIT", "yellow bold"),
+    SessionStatus.WAITING_ANSWER: ("WAIT", "yellow bold"),
+    SessionStatus.ERROR: ("ERROR", "red bold"),
+    SessionStatus.ENDED: ("ENDED", "dim"),
 }
 
 
