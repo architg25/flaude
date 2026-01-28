@@ -3,19 +3,19 @@
 from datetime import datetime
 from pathlib import Path
 
+from rich.text import Text
 from textual.widgets import DataTable
 
 from flaude.constants import utcnow
-
 from flaude.state.models import SessionState, SessionStatus
 
-STATUS_ICONS = {
-    SessionStatus.WORKING: ("▶", "status-working"),
-    SessionStatus.IDLE: ("·", "status-idle"),
-    SessionStatus.WAITING_PERMISSION: ("!", "status-waiting"),
-    SessionStatus.WAITING_ANSWER: ("?", "status-waiting"),
-    SessionStatus.ERROR: ("✗", "status-error"),
-    SessionStatus.ENDED: ("○", "status-ended"),
+STATUS_LABELS = {
+    SessionStatus.WORKING: ("Running", "green"),
+    SessionStatus.IDLE: ("Idle", "dim"),
+    SessionStatus.WAITING_PERMISSION: ("Wait", "yellow bold"),
+    SessionStatus.WAITING_ANSWER: ("Wait", "yellow bold"),
+    SessionStatus.ERROR: ("Error", "red bold"),
+    SessionStatus.ENDED: ("Ended", "dim"),
 }
 
 
@@ -24,7 +24,7 @@ class SessionTable(DataTable):
 
     def on_mount(self) -> None:
         self.cursor_type = "row"
-        self.add_columns("ST", "Session", "Project", "Term", "Age")
+        self.add_columns("Status", "Session", "Project", "Term", "Age")
         self.border_title = "Sessions"
 
     def update_sessions(self, sessions: dict[str, SessionState]) -> None:
@@ -53,13 +53,14 @@ class SessionTable(DataTable):
         now = utcnow()
         restore_row = 0
         for idx, state in enumerate(sorted_sessions):
-            icon, css_class = STATUS_ICONS.get(state.status, ("?", "status-idle"))
+            label, style = STATUS_LABELS.get(state.status, ("?", "dim"))
+            status_text = Text(label, style=style)
             project = Path(state.cwd).name if state.cwd else "?"
             age = _format_age(now, state.started_at)
             term = state.terminal or "?"
 
             self.add_row(
-                icon,
+                status_text,
                 state.session_id[:8],
                 project[:20],
                 term,
