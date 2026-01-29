@@ -5,6 +5,7 @@ import os
 import yaml
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, DataTable
 
 from flaude.constants import CONFIG_PATH, DEFAULT_THEME
@@ -16,6 +17,7 @@ from flaude.terminal.launch import launch_session
 from flaude.terminal.navigate import navigate_to_session
 from flaude.tui.screens.input_dialog import InputDialog
 from flaude.tui.widgets.session_table import SessionTable
+from flaude.tui.widgets.session_detail import SessionDetail
 from flaude.tui.widgets.permission_panel import PermissionPanel
 from flaude.tui.widgets.activity_log import ActivityLog
 
@@ -62,11 +64,15 @@ class FlaudeApp(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield SessionTable(id="session-table")
-        yield PermissionPanel(id="permission-panel")
-        yield ActivityLog(
-            initial_mode=self._config.get("log_mode", "tools"), id="activity-log"
-        )
+        with Horizontal(id="main-split"):
+            with Vertical(id="left-pane"):
+                yield SessionTable(id="session-table")
+                yield PermissionPanel(id="permission-panel")
+                yield ActivityLog(
+                    initial_mode=self._config.get("log_mode", "tools"),
+                    id="activity-log",
+                )
+            yield SessionDetail(id="session-detail")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -91,8 +97,16 @@ class FlaudeApp(App):
         table.update_sessions(active)
         self.query_one(PermissionPanel).update_permissions(active)
 
-        log = self.query_one(ActivityLog)
         selected_id = table.get_selected_session_id()
+
+        # Update detail panel
+        detail = self.query_one(SessionDetail)
+        if selected_id and selected_id in active:
+            detail.update_session(active[selected_id])
+        else:
+            detail.update_session(None)
+
+        log = self.query_one(ActivityLog)
         log.set_session_filter(selected_id)
         # Pass transcript path for the selected session
         if selected_id and selected_id in active:

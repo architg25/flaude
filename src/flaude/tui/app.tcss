@@ -2,6 +2,16 @@ Screen {
     layout: vertical;
 }
 
+#main-split {
+    layout: horizontal;
+    height: 1fr;
+}
+
+#left-pane {
+    width: 3fr;
+    layout: vertical;
+}
+
 #session-table {
     height: 2fr;
     margin: 0 1;
@@ -21,26 +31,13 @@ Screen {
     border: solid $surface;
 }
 
-.status-working {
-    color: $success;
-}
-
-.status-idle {
-    color: $text-muted;
-}
-
-.status-waiting {
-    color: $warning;
-    text-style: bold;
-}
-
-.status-error {
-    color: $error;
-    text-style: bold;
-}
-
-.status-ended {
-    color: $text-disabled;
+#session-detail {
+    width: 1fr;
+    min-width: 35;
+    margin: 0 1 0 0;
+    padding: 1 2;
+    border: solid $primary;
+    overflow-y: auto;
 }
 
 PermissionPanel .urgent {
@@ -48,12 +45,6 @@ PermissionPanel .urgent {
 }
 
 #no-permissions {
-    color: $text-muted;
-    text-style: italic;
-    padding: 1 2;
-}
-
-#no-sessions {
     color: $text-muted;
     text-style: italic;
     padding: 1 2;
