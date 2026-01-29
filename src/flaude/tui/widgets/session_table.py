@@ -10,11 +10,11 @@ from flaude.constants import utcnow
 from flaude.state.models import SessionState, SessionStatus
 
 STATUS_LABELS = {
-    SessionStatus.WORKING: ("RUNNING", "bold black on green"),
-    SessionStatus.IDLE: ("IDLE", ""),
-    SessionStatus.WAITING_PERMISSION: ("PERMISSION", "bold black on yellow"),
-    SessionStatus.WAITING_ANSWER: ("INPUT", "bold black on cyan"),
-    SessionStatus.ERROR: ("ERROR", "bold white on red"),
+    SessionStatus.WORKING: ("RUNNING", "green bold"),
+    SessionStatus.IDLE: ("IDLE", "dim"),
+    SessionStatus.WAITING_PERMISSION: ("PERMISSION", "yellow bold"),
+    SessionStatus.WAITING_ANSWER: ("INPUT", "cyan bold"),
+    SessionStatus.ERROR: ("ERROR", "red bold"),
     SessionStatus.ENDED: ("ENDED", "dim"),
 }
 
@@ -24,7 +24,7 @@ class SessionTable(DataTable):
 
     def on_mount(self) -> None:
         self.cursor_type = "row"
-        self.add_columns("Status", "Session", "Project", "Term", "Age")
+        self.add_columns("Status", "Session", "Project", "Terminal", "Uptime")
         self.border_title = "Sessions"
 
     def update_sessions(self, sessions: dict[str, SessionState]) -> None:
