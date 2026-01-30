@@ -56,7 +56,7 @@ class SessionTable(DataTable):
             label, style = STATUS_LABELS.get(state.status, ("?", "dim"))
             status_text = Text(label, style=style)
             project = Path(state.cwd).name if state.cwd else "?"
-            age = _format_age(now, state.started_at)
+            uptime = _format_uptime(now, state.started_at)
             term = state.terminal or "?"
 
             self.add_row(
@@ -64,7 +64,7 @@ class SessionTable(DataTable):
                 state.session_id[:8],
                 project[:20],
                 term,
-                age,
+                uptime,
                 key=state.session_id,
             )
             if state.session_id == selected_key:
@@ -82,7 +82,7 @@ class SessionTable(DataTable):
         return str(row_key.value) if row_key else None
 
 
-def _format_age(now: datetime, started: datetime) -> str:
+def _format_uptime(now: datetime, started: datetime) -> str:
     delta = now - started
     minutes = int(delta.total_seconds() // 60)
     if minutes < 60:

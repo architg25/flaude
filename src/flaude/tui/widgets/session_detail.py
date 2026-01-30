@@ -33,7 +33,7 @@ class SessionDetail(Static):
         lines.append(f"[bold]Terminal[/]    {state.terminal or '?'}")
         lines.append(f"[bold]Mode[/]        {state.permission_mode}")
         lines.append(f"[bold]Started[/]     {state.started_at.strftime('%H:%M')}")
-        lines.append(f"[bold]Age[/]         {_format_age(state.started_at)}")
+        lines.append(f"[bold]Uptime[/]      {_format_uptime(state.started_at)}")
 
         # Last prompt
         if state.last_prompt:
@@ -62,7 +62,7 @@ class SessionDetail(Static):
         self.update("\n".join(lines))
 
 
-def _format_age(started) -> str:
+def _format_uptime(started) -> str:
     delta = utcnow() - started
     minutes = int(delta.total_seconds() // 60)
     if minutes < 60:
