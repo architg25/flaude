@@ -131,13 +131,16 @@ def _load_or_create(event: dict, sm: StateManager) -> SessionState:
             started_at=now,
             last_event_at=now,
         )
-    # Backfill any missing fields from event data
+    # Backfill missing fields from event data
     if not state.transcript_path and event.get("transcript_path"):
         state.transcript_path = event["transcript_path"]
     if not state.cwd and event.get("cwd"):
         state.cwd = event["cwd"]
     if not state.terminal:
         state.terminal = _detect_terminal_from_env()
+    # Always update permission_mode — it can change during a session
+    if event.get("permission_mode"):
+        state.permission_mode = event["permission_mode"]
     return state
 
 
