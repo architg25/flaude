@@ -34,6 +34,15 @@ class SessionDetail(Static):
         lines.append(f"[bold]Mode[/]        {state.permission_mode}")
         lines.append(f"[bold]Started[/]     {state.started_at.strftime('%H:%M')}")
         lines.append(f"[bold]Uptime[/]      {_format_uptime(state.started_at)}")
+        if state.context_tokens > 0:
+            ctx = state.context_tokens
+            if ctx >= 1_000_000:
+                ctx_str = f"{ctx / 1_000_000:.1f}M"
+            elif ctx >= 1_000:
+                ctx_str = f"{ctx // 1_000}K"
+            else:
+                ctx_str = str(ctx)
+            lines.append(f"[bold]Context[/]     {ctx_str}")
 
         # Last prompt
         if state.last_prompt:

@@ -113,6 +113,42 @@ def _detect_terminal_from_env() -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Token usage from transcript
+# ---------------------------------------------------------------------------
+
+
+def _get_context_tokens(transcript_path: str | None) -> int:
+    """Read the latest token usage from the transcript JSONL."""
+    if not transcript_path:
+        return 0
+    try:
+        path = Path(transcript_path)
+        if not path.exists():
+            return 0
+        # Read last 10KB to find the most recent usage entry
+        size = path.stat().st_size
+        with open(path, "rb") as f:
+            f.seek(max(0, size - 10240))
+            tail = f.read().decode("utf-8", errors="ignore")
+        # Search backwards for the latest usage
+        for line in reversed(tail.strip().splitlines()):
+            try:
+                entry = json.loads(line)
+                usage = entry.get("message", {}).get("usage")
+                if usage:
+                    return (
+                        usage.get("cache_read_input_tokens", 0)
+                        + usage.get("input_tokens", 0)
+                        + usage.get("cache_creation_input_tokens", 0)
+                    )
+            except (json.JSONDecodeError, AttributeError):
+                continue
+    except (OSError, ValueError):
+        pass
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Session loading helper
 # ---------------------------------------------------------------------------
 
@@ -204,6 +240,7 @@ def _handle_post_tool_use(event: dict, sm: StateManager) -> None:
     state = _load_or_create(event, sm)
     state.last_event = "PostToolUse"
     state.last_event_at = utcnow()
+    state.context_tokens = _get_context_tokens(state.transcript_path)
     sm.save_session(state)
     _log(state.session_id, "PostToolUse", tool_name)
 

@@ -24,7 +24,9 @@ class SessionTable(DataTable):
 
     def on_mount(self) -> None:
         self.cursor_type = "row"
-        self.add_columns("Status", "Session", "Project", "Terminal", "Uptime")
+        self.add_columns(
+            "Status", "Session", "Project", "Terminal", "Mode", "Context", "Uptime"
+        )
         self.border_title = "Sessions"
 
     def update_sessions(self, sessions: dict[str, SessionState]) -> None:
@@ -58,12 +60,16 @@ class SessionTable(DataTable):
             project = Path(state.cwd).name if state.cwd else "?"
             uptime = _format_uptime(now, state.started_at)
             term = state.terminal or "?"
+            mode = state.permission_mode
+            context = _format_tokens(state.context_tokens)
 
             self.add_row(
                 status_text,
                 state.session_id[:8],
                 project[:20],
                 term,
+                mode,
+                context,
                 uptime,
                 key=state.session_id,
             )
@@ -80,6 +86,16 @@ class SessionTable(DataTable):
             return None
         row_key, _ = self.coordinate_to_cell_key(self.cursor_coordinate)
         return str(row_key.value) if row_key else None
+
+
+def _format_tokens(tokens: int) -> str:
+    if tokens <= 0:
+        return "-"
+    if tokens >= 1_000_000:
+        return f"{tokens / 1_000_000:.1f}M"
+    if tokens >= 1_000:
+        return f"{tokens // 1_000}K"
+    return str(tokens)
 
 
 def _format_uptime(now: datetime, started: datetime) -> str:
