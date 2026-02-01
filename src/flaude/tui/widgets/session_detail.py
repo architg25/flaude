@@ -7,6 +7,12 @@ from textual.widgets import Static
 from flaude.constants import utcnow
 from flaude.state.models import SessionState
 
+_MODEL_LIMITS = {
+    "claude-opus-4-6": 1_000_000,
+    "claude-sonnet-4-6": 200_000,
+    "claude-haiku-4-5": 200_000,
+}
+
 
 class SessionDetail(Static):
     """Displays detailed info for the selected session."""
@@ -32,6 +38,8 @@ class SessionDetail(Static):
         lines.append(f"[bold]Directory[/]   {state.cwd}")
         lines.append(f"[bold]Terminal[/]    {state.terminal or '?'}")
         lines.append(f"[bold]Mode[/]        {state.permission_mode}")
+        if state.model:
+            lines.append(f"[bold]Model[/]       {state.model}")
         lines.append(f"[bold]Started[/]     {state.started_at.strftime('%H:%M')}")
         lines.append(f"[bold]Uptime[/]      {_format_uptime(state.started_at)}")
         if state.context_tokens > 0:
@@ -42,7 +50,12 @@ class SessionDetail(Static):
                 ctx_str = f"{ctx // 1_000}K"
             else:
                 ctx_str = str(ctx)
-            lines.append(f"[bold]Context[/]     {ctx_str}")
+            limit = _MODEL_LIMITS.get(state.model or "", 200_000)
+            if limit >= 1_000_000:
+                limit_str = f"{limit // 1_000_000}M"
+            else:
+                limit_str = f"{limit // 1_000}K"
+            lines.append(f"[bold]Context[/]     {ctx_str} / {limit_str}")
 
         # Last prompt
         if state.last_prompt:

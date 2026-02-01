@@ -9,6 +9,13 @@ from textual.widgets import DataTable
 from flaude.constants import utcnow
 from flaude.state.models import SessionState, SessionStatus
 
+MODEL_LIMITS = {
+    "claude-opus-4-6": 1_000_000,
+    "claude-sonnet-4-6": 200_000,
+    "claude-haiku-4-5": 200_000,
+}
+DEFAULT_LIMIT = 200_000
+
 STATUS_LABELS = {
     SessionStatus.WORKING: ("RUNNING", "green bold"),
     SessionStatus.IDLE: ("IDLE", "dim"),
@@ -61,7 +68,7 @@ class SessionTable(DataTable):
             uptime = _format_uptime(now, state.started_at)
             term = state.terminal or "?"
             mode = state.permission_mode
-            context = _format_tokens(state.context_tokens)
+            context = _format_context(state.context_tokens, state.model)
 
             self.add_row(
                 status_text,
@@ -88,14 +95,24 @@ class SessionTable(DataTable):
         return str(row_key.value) if row_key else None
 
 
-def _format_tokens(tokens: int) -> str:
+def _format_context(tokens: int, model: str | None) -> Text:
     if tokens <= 0:
-        return "-"
+        return Text("-", style="dim")
     if tokens >= 1_000_000:
-        return f"{tokens / 1_000_000:.1f}M"
-    if tokens >= 1_000:
-        return f"{tokens // 1_000}K"
-    return str(tokens)
+        label = f"{tokens / 1_000_000:.1f}M"
+    elif tokens >= 1_000:
+        label = f"{tokens // 1_000}K"
+    else:
+        label = str(tokens)
+    limit = MODEL_LIMITS.get(model or "", DEFAULT_LIMIT)
+    ratio = tokens / limit if limit else 0
+    if ratio > 0.8:
+        style = "red bold"
+    elif ratio > 0.5:
+        style = "yellow"
+    else:
+        style = "green"
+    return Text(label, style=style)
 
 
 def _format_uptime(now: datetime, started: datetime) -> str:

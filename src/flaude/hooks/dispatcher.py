@@ -117,14 +117,14 @@ def _detect_terminal_from_env() -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _get_context_tokens(transcript_path: str | None) -> int:
-    """Read the latest token usage from the transcript JSONL."""
+def _get_usage_from_transcript(transcript_path: str | None) -> tuple[int, str | None]:
+    """Read the latest token usage and model from the transcript JSONL."""
     if not transcript_path:
-        return 0
+        return 0, None
     try:
         path = Path(transcript_path)
         if not path.exists():
-            return 0
+            return 0, None
         # Read last 10KB to find the most recent usage entry
         size = path.stat().st_size
         with open(path, "rb") as f:
@@ -134,18 +134,21 @@ def _get_context_tokens(transcript_path: str | None) -> int:
         for line in reversed(tail.strip().splitlines()):
             try:
                 entry = json.loads(line)
-                usage = entry.get("message", {}).get("usage")
+                msg = entry.get("message", {})
+                usage = msg.get("usage")
                 if usage:
-                    return (
+                    tokens = (
                         usage.get("cache_read_input_tokens", 0)
                         + usage.get("input_tokens", 0)
                         + usage.get("cache_creation_input_tokens", 0)
                     )
+                    model = msg.get("model")
+                    return tokens, model
             except (json.JSONDecodeError, AttributeError):
                 continue
     except (OSError, ValueError):
         pass
-    return 0
+    return 0, None
 
 
 # ---------------------------------------------------------------------------
@@ -240,7 +243,10 @@ def _handle_post_tool_use(event: dict, sm: StateManager) -> None:
     state = _load_or_create(event, sm)
     state.last_event = "PostToolUse"
     state.last_event_at = utcnow()
-    state.context_tokens = _get_context_tokens(state.transcript_path)
+    tokens, model = _get_usage_from_transcript(state.transcript_path)
+    state.context_tokens = tokens
+    if model:
+        state.model = model
     sm.save_session(state)
     _log(state.session_id, "PostToolUse", tool_name)
 
