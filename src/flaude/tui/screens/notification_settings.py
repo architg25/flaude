@@ -4,7 +4,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, Horizontal
 from textual.screen import ModalScreen
-from textual.widgets import Switch, Input, Static, Label
+from textual.widgets import Switch, Input, Static, Label, Button
 
 
 class NotificationSettings(ModalScreen[dict | None]):
@@ -12,6 +12,8 @@ class NotificationSettings(ModalScreen[dict | None]):
 
     BINDINGS = [
         Binding("escape", "cancel", "Cancel"),
+        Binding("up", "focus_previous", show=False),
+        Binding("down", "focus_next", show=False),
     ]
 
     DEFAULT_CSS = """
@@ -43,6 +45,10 @@ class NotificationSettings(ModalScreen[dict | None]):
     }
     .setting-row Input {
         width: 10;
+    }
+    #btn-save {
+        margin-top: 1;
+        width: 100%;
     }
     #settings-hint {
         margin-top: 1;
@@ -78,15 +84,21 @@ class NotificationSettings(ModalScreen[dict | None]):
                     id="input-timer",
                     type="integer",
                 )
+            yield Button("Save", id="btn-save", variant="primary")
             yield Static(
-                "[bold]Enter[/] Save  [bold]Esc[/] Cancel",
+                "[bold]Up[/]/[bold]Down[/] Navigate  "
+                "[bold]Space[/] Toggle  "
+                "[bold]Esc[/] Cancel",
                 id="settings-hint",
             )
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        self._save()
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-save":
+            self._save()
 
-    def key_enter(self) -> None:
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        # Prevent Enter from bubbling to the app
+        event.stop()
         self._save()
 
     def _save(self) -> None:

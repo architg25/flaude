@@ -52,7 +52,8 @@ class FlaudeApp(App):
         Binding("g", "goto_session", "Go to Session"),
         Binding("n", "new_session", "New Claude Session"),
         Binding("l", "cycle_log_mode", "Log Mode"),
-        Binding("s", "notification_settings", "Notifications"),
+        Binding("s", "toggle_notifications", "Notifications"),
+        Binding("S", "notification_settings", "Notification Settings", show=False),
         Binding("t", "change_theme", "Theme"),
         Binding("question_mark", "help", "Help"),
     ]
@@ -236,6 +237,20 @@ class FlaudeApp(App):
                 stderr=subprocess.DEVNULL,
             )
 
+    def action_toggle_notifications(self) -> None:
+        notif = self._config.setdefault("notifications", {})
+        enabled = not notif.get("enabled", True)
+        notif["enabled"] = enabled
+        try:
+            _save_config(self._config)
+        except Exception:
+            pass
+        if enabled:
+            self.notify("Notifications: ON")
+        else:
+            self.notify("Notifications: OFF")
+            self._alerted_turns.clear()
+
     def action_notification_settings(self) -> None:
         current = self._config.get(
             "notifications",
@@ -264,6 +279,6 @@ class FlaudeApp(App):
 
     def action_help(self) -> None:
         self.notify(
-            "[Enter/g] Go to Session  [n] New  [s] Notifications  [l] Log  [t] Theme  [q] Quit",
+            "[Enter/g] Go to Session  [n] New  [s] Notifications  [S] Settings  [l] Log  [t] Theme  [q] Quit",
             timeout=10,
         )
