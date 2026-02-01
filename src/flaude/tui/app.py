@@ -16,6 +16,7 @@ from flaude.terminal.detect import detect_terminal
 from flaude.terminal.launch import launch_session
 from flaude.terminal.navigate import navigate_to_session
 from flaude.tui.screens.input_dialog import InputDialog
+from flaude.tui.screens.notification_settings import NotificationSettings
 from flaude.tui.widgets.session_table import SessionTable
 from flaude.tui.widgets.session_detail import SessionDetail
 from flaude.tui.widgets.permission_panel import PermissionPanel
@@ -51,7 +52,7 @@ class FlaudeApp(App):
         Binding("g", "goto_session", "Go to Session"),
         Binding("n", "new_session", "New Claude Session"),
         Binding("l", "cycle_log_mode", "Log Mode"),
-        Binding("s", "toggle_alert", "Alert"),
+        Binding("s", "notification_settings", "Notifications"),
         Binding("t", "change_theme", "Theme"),
         Binding("question_mark", "help", "Help"),
     ]
@@ -129,14 +130,15 @@ class FlaudeApp(App):
             self.title = f"flaude ({len(active)} sessions)"
 
         # Long turn alert
-        if self._config.get("long_turn_alert", True):
-            threshold = self._config.get("long_turn_seconds", 300)
+        notif = self._config.get("notifications", {})
+        if notif.get("enabled", True):
+            threshold = notif.get("long_turn_minutes", 5) * 60
             now = utcnow()
             for sid, state in active.items():
                 if state.turn_started_at:
                     elapsed = (now - state.turn_started_at).total_seconds()
                     if elapsed > threshold and sid not in self._alerted_turns:
-                        self.bell()
+                        self._fire_alert(state)
                         self._alerted_turns.add(sid)
                 else:
                     self._alerted_turns.discard(sid)
@@ -206,21 +208,62 @@ class FlaudeApp(App):
 
         self.notify(f"Log: {MODE_LABELS[log.mode]}")
 
-    def action_toggle_alert(self) -> None:
-        enabled = not self._config.get("long_turn_alert", True)
-        self._config["long_turn_alert"] = enabled
-        try:
-            _save_config(self._config)
-        except Exception:
-            pass
-        if enabled:
-            self.notify("Alert: ON")
-        else:
-            self.notify("Alert: OFF")
+    def _fire_alert(self, state) -> None:
+        """Fire configured notification methods."""
+        import subprocess
+        from pathlib import Path
+
+        notif = self._config.get("notifications", {})
+        project = Path(state.cwd).name if state.cwd else state.session_id[:8]
+
+        if notif.get("terminal_bell", True):
+            self.bell()
+        if notif.get("system_sound", False):
+            subprocess.Popen(
+                ["afplay", "/System/Library/Sounds/Glass.aiff"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        if notif.get("macos_alert", False):
+            subprocess.Popen(
+                [
+                    "osascript",
+                    "-e",
+                    f'display notification "Turn running over {notif.get("long_turn_minutes", 5)} min" '
+                    f'with title "flaude" subtitle "{project}"',
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+    def action_notification_settings(self) -> None:
+        current = self._config.get(
+            "notifications",
+            {
+                "enabled": True,
+                "terminal_bell": True,
+                "macos_alert": False,
+                "system_sound": False,
+                "long_turn_minutes": 5,
+            },
+        )
+
+        def on_result(result: dict | None) -> None:
+            if result is None:
+                return
+            self._config["notifications"] = result
+            try:
+                _save_config(self._config)
+            except Exception:
+                pass
             self._alerted_turns.clear()
+            status = "ON" if result["enabled"] else "OFF"
+            self.notify(f"Notifications: {status} ({result['long_turn_minutes']}min)")
+
+        self.push_screen(NotificationSettings(current), on_result)
 
     def action_help(self) -> None:
         self.notify(
-            "[Enter/g] Go to Session  [n] New  [s] Alert  [l] Log  [t] Theme  [q] Quit",
+            "[Enter/g] Go to Session  [n] New  [s] Notifications  [l] Log  [t] Theme  [q] Quit",
             timeout=10,
         )
