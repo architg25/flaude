@@ -8,7 +8,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, DataTable
 
-from flaude.constants import CONFIG_PATH, DEFAULT_THEME
+from flaude.constants import CONFIG_PATH, DEFAULT_THEME, utcnow
 from flaude.state.manager import StateManager
 from flaude.state.models import SessionStatus
 from flaude.state.cleanup import cleanup_stale_sessions
@@ -51,6 +51,7 @@ class FlaudeApp(App):
         Binding("g", "goto_session", "Go to Session"),
         Binding("n", "new_session", "New Claude Session"),
         Binding("l", "cycle_log_mode", "Log Mode"),
+        Binding("s", "toggle_alert", "Alert"),
         Binding("t", "change_theme", "Theme"),
         Binding("question_mark", "help", "Help"),
     ]
@@ -61,6 +62,7 @@ class FlaudeApp(App):
         self._fallback_terminal = detect_terminal()
         self._config = _load_config()
         self.theme = self._config.get("theme", DEFAULT_THEME)
+        self._alerted_turns: set[str] = set()
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -125,6 +127,19 @@ class FlaudeApp(App):
             self.title = f"flaude ({len(active)} sessions, {waiting} waiting)"
         else:
             self.title = f"flaude ({len(active)} sessions)"
+
+        # Long turn alert
+        if self._config.get("long_turn_alert", True):
+            threshold = self._config.get("long_turn_seconds", 300)
+            now = utcnow()
+            for sid, state in active.items():
+                if state.turn_started_at:
+                    elapsed = (now - state.turn_started_at).total_seconds()
+                    if elapsed > threshold and sid not in self._alerted_turns:
+                        self.bell()
+                        self._alerted_turns.add(sid)
+                else:
+                    self._alerted_turns.discard(sid)
 
     def _cleanup(self) -> None:
         cleanup_stale_sessions(self._mgr)
@@ -191,8 +206,21 @@ class FlaudeApp(App):
 
         self.notify(f"Log: {MODE_LABELS[log.mode]}")
 
+    def action_toggle_alert(self) -> None:
+        enabled = not self._config.get("long_turn_alert", True)
+        self._config["long_turn_alert"] = enabled
+        try:
+            _save_config(self._config)
+        except Exception:
+            pass
+        if enabled:
+            self.notify("Alert: ON")
+        else:
+            self.notify("Alert: OFF")
+            self._alerted_turns.clear()
+
     def action_help(self) -> None:
         self.notify(
-            "[Enter/g] Go to Session  [n] New Claude Session  [l] Log Mode  [t] Theme  [q] Quit",
+            "[Enter/g] Go to Session  [n] New  [s] Alert  [l] Log  [t] Theme  [q] Quit",
             timeout=10,
         )

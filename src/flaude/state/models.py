@@ -37,6 +37,7 @@ class SessionState(BaseModel):
     last_prompt: str | None = None
     pending_question: dict | None = None
     terminal: str | None = None
+    turn_started_at: datetime | None = None
     model: str | None = None
     context_tokens: int = 0
     error_count: int = 0

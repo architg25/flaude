@@ -254,6 +254,7 @@ def _handle_post_tool_use(event: dict, sm: StateManager) -> None:
 def _handle_stop(event: dict, sm: StateManager) -> None:
     state = _load_or_create(event, sm)
     state.status = SessionStatus.IDLE
+    state.turn_started_at = None
     state.last_event = "Stop"
     state.last_event_at = utcnow()
     sm.save_session(state)
@@ -279,6 +280,7 @@ def _handle_user_prompt_submit(event: dict, sm: StateManager) -> None:
     state = _load_or_create(event, sm)
     prompt = event.get("user_prompt", "")
     state.status = SessionStatus.WORKING
+    state.turn_started_at = utcnow()
     state.last_prompt = prompt[:200] if prompt else state.last_prompt
     state.pending_question = None
     state.last_event = "UserPromptSubmit"

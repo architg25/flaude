@@ -42,6 +42,10 @@ class SessionDetail(Static):
             lines.append(f"[bold]Model[/]       {state.model}")
         lines.append(f"[bold]Started[/]     {state.started_at.strftime('%H:%M')}")
         lines.append(f"[bold]Uptime[/]      {_format_uptime(state.started_at)}")
+        if state.turn_started_at:
+            turn_secs = int((utcnow() - state.turn_started_at).total_seconds())
+            mins, secs = divmod(turn_secs, 60)
+            lines.append(f"[bold]Turn[/]        {mins}m{secs:02d}s")
         if state.context_tokens > 0:
             ctx = state.context_tokens
             if ctx >= 1_000_000:
