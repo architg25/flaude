@@ -14,6 +14,7 @@ class NotificationSettings(ModalScreen[dict | None]):
         Binding("escape", "cancel", "Cancel"),
         Binding("up", "focus_previous", show=False),
         Binding("down", "focus_next", show=False),
+        Binding("tab", "toggle_focused", show=False),
     ]
 
     DEFAULT_CSS = """
@@ -87,10 +88,15 @@ class NotificationSettings(ModalScreen[dict | None]):
             yield Button("Save", id="btn-save", variant="primary")
             yield Static(
                 "[bold]Up[/]/[bold]Down[/] Navigate  "
-                "[bold]Space[/] Toggle  "
+                "[bold]Tab[/] Toggle  "
                 "[bold]Esc[/] Cancel",
                 id="settings-hint",
             )
+
+    def action_toggle_focused(self) -> None:
+        focused = self.focused
+        if isinstance(focused, Switch):
+            focused.toggle()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-save":
