@@ -82,7 +82,7 @@ class NotificationSettings(ModalScreen[dict | None]):
                 yield Input(
                     value=str(c.get("long_turn_minutes", 5)),
                     id="input-timer",
-                    type="integer",
+                    type="number",
                 )
             yield Button("Save", id="btn-save", variant="primary")
             yield Static(
@@ -103,16 +103,16 @@ class NotificationSettings(ModalScreen[dict | None]):
 
     def _save(self) -> None:
         try:
-            minutes = int(self.query_one("#input-timer", Input).value)
+            minutes = float(self.query_one("#input-timer", Input).value)
         except ValueError:
-            minutes = 5
+            minutes = 5.0
         self.dismiss(
             {
                 "enabled": self.query_one("#sw-enabled", Switch).value,
                 "terminal_bell": self.query_one("#sw-bell", Switch).value,
                 "macos_alert": self.query_one("#sw-macos", Switch).value,
                 "system_sound": self.query_one("#sw-sound", Switch).value,
-                "long_turn_minutes": max(1, minutes),
+                "long_turn_minutes": max(0.1, minutes),
             }
         )
 
