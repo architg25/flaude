@@ -63,7 +63,11 @@ class SessionTable(DataTable):
         restore_row = 0
         for idx, state in enumerate(sorted_sessions):
             label, style = STATUS_LABELS.get(state.status, ("?", "dim"))
-            status_text = Text(label, style=style)
+            if state.status == SessionStatus.WORKING and state.turn_started_at:
+                duration = _format_compact(now, state.turn_started_at)
+            else:
+                duration = _format_compact(now, state.last_event_at)
+            status_text = Text(f"{label} {duration}", style=style)
             project = Path(state.cwd).name if state.cwd else "?"
             uptime = _format_uptime(now, state.started_at)
             term = state.terminal or "?"
@@ -93,6 +97,17 @@ class SessionTable(DataTable):
             return None
         row_key, _ = self.coordinate_to_cell_key(self.cursor_coordinate)
         return str(row_key.value) if row_key else None
+
+
+def _format_compact(now: datetime, since: datetime) -> str:
+    secs = int((now - since).total_seconds())
+    if secs < 60:
+        return f"{secs}s"
+    mins = secs // 60
+    if mins < 60:
+        return f"{mins}m"
+    hours = mins // 60
+    return f"{hours}h{mins % 60}m"
 
 
 def _format_context(tokens: int, model: str | None) -> Text:
