@@ -16,6 +16,7 @@ from flaude.terminal.detect import detect_terminal
 from flaude.terminal.launch import launch_session
 from flaude.terminal.navigate import navigate_to_session
 from flaude.tui.screens.input_dialog import InputDialog
+from flaude.tui.screens.help_dialog import HelpDialog
 from flaude.tui.screens.notification_settings import NotificationSettings
 from flaude.tui.widgets.session_table import SessionTable
 from flaude.tui.widgets.session_detail import SessionDetail
@@ -278,7 +279,4 @@ class FlaudeApp(App):
         self.push_screen(NotificationSettings(current), on_result)
 
     def action_help(self) -> None:
-        self.notify(
-            "[Enter/g] Go to Session  [n] New  [s] Notifications  [S] Settings  [l] Log  [t] Theme  [q] Quit",
-            timeout=10,
-        )
+        self.push_screen(HelpDialog())
