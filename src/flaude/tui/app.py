@@ -131,18 +131,20 @@ class FlaudeApp(App):
         else:
             self.title = f"flaude ({len(active)} sessions)"
 
-        # Long turn alert
+        # Alert when a long turn finishes
         notif = self._config.get("notifications", {})
         if notif.get("enabled", True):
             threshold = notif.get("long_turn_minutes", 5) * 60
-            now = utcnow()
             for sid, state in active.items():
-                if state.turn_started_at:
-                    elapsed = (now - state.turn_started_at).total_seconds()
-                    if elapsed > threshold and sid not in self._alerted_turns:
-                        self._fire_alert(state)
-                        self._alerted_turns.add(sid)
-                else:
+                if (
+                    state.last_turn_duration > threshold
+                    and state.turn_started_at is None
+                    and sid not in self._alerted_turns
+                ):
+                    self._fire_alert(state)
+                    self._alerted_turns.add(sid)
+                # Reset when a new turn starts
+                if state.turn_started_at is not None:
                     self._alerted_turns.discard(sid)
 
     def _cleanup(self) -> None:
@@ -231,7 +233,7 @@ class FlaudeApp(App):
                 [
                     "osascript",
                     "-e",
-                    f'display notification "Turn running over {notif.get("long_turn_minutes", 5)} min" '
+                    f'display notification "Turn finished after {int(state.last_turn_duration // 60)}m" '
                     f'with title "flaude" subtitle "{project}"',
                 ],
                 stdout=subprocess.DEVNULL,

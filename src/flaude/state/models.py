@@ -38,6 +38,7 @@ class SessionState(BaseModel):
     pending_question: dict | None = None
     terminal: str | None = None
     turn_started_at: datetime | None = None
+    last_turn_duration: float = 0
     model: str | None = None
     context_tokens: int = 0
     error_count: int = 0

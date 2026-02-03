@@ -1,8 +1,8 @@
-"""Notification settings dialog — manual navigation, no focusable widgets."""
+"""Notification settings dialog — manual navigation."""
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import Vertical, Horizontal
 from textual.screen import ModalScreen
 from textual.widgets import Static, Input
 
@@ -51,18 +51,21 @@ class NotificationSettings(ModalScreen[dict | None]):
         height: 1;
         background: $primary 30%;
     }
-    #timer-row {
-        padding: 0 1;
+    .timer-row {
         height: 3;
+        padding: 0 1;
     }
-    #timer-row-selected {
-        padding: 0 1;
+    .timer-row-selected {
         height: 3;
+        padding: 0 1;
         background: $primary 30%;
     }
+    #timer-label {
+        width: 22;
+        padding-top: 1;
+    }
     #input-timer {
-        width: 12;
-        margin-left: 2;
+        width: 10;
     }
     #settings-hint {
         margin-top: 1;
@@ -75,7 +78,6 @@ class NotificationSettings(ModalScreen[dict | None]):
         super().__init__()
         self._current = dict(current)
         self._index = 0
-        # 5 items: 4 toggles + 1 timer input
         self._item_count = len(SETTINGS) + 1
 
     def compose(self) -> ComposeResult:
@@ -83,12 +85,13 @@ class NotificationSettings(ModalScreen[dict | None]):
             yield Static("Notification Settings", id="settings-title")
             for i, (key, label, _) in enumerate(SETTINGS):
                 yield Static("", id=f"row-{i}", classes="setting-line")
-            yield Static("", id="row-timer", classes="setting-line")
-            yield Input(
-                value=str(self._current.get("long_turn_minutes", 5)),
-                id="input-timer",
-                type="number",
-            )
+            with Horizontal(id="timer-container", classes="timer-row"):
+                yield Static("  Timer (minutes)", id="timer-label")
+                yield Input(
+                    value=str(self._current.get("long_turn_minutes", 5)),
+                    id="input-timer",
+                    type="number",
+                )
             yield Static(
                 "[bold]Up[/]/[bold]Down[/] Navigate  "
                 "[bold]Tab[/] Toggle  "
@@ -99,7 +102,6 @@ class NotificationSettings(ModalScreen[dict | None]):
 
     def on_mount(self) -> None:
         self._render_all()
-        # Remove focus from the Input so arrow keys work
         self.set_focus(None)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -123,7 +125,6 @@ class NotificationSettings(ModalScreen[dict | None]):
             self._render_all()
 
     def action_confirm(self) -> None:
-        # If focused on input, don't let it also bubble
         self._save()
 
     def action_cancel(self) -> None:
@@ -144,12 +145,10 @@ class NotificationSettings(ModalScreen[dict | None]):
             row.set_class(i == self._index, "setting-line-selected")
             row.set_class(i != self._index, "setting-line")
 
-        timer_row = self.query_one("#row-timer", Static)
-        mins = self._current.get("long_turn_minutes", 5)
-        timer_row.update(f"  Timer (minutes)")
         is_timer = self._index == len(SETTINGS)
-        timer_row.set_class(is_timer, "setting-line-selected")
-        timer_row.set_class(not is_timer, "setting-line")
+        container = self.query_one("#timer-container")
+        container.set_class(is_timer, "timer-row-selected")
+        container.set_class(not is_timer, "timer-row")
 
     def _save(self) -> None:
         try:

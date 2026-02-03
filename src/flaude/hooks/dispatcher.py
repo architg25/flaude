@@ -254,6 +254,8 @@ def _handle_post_tool_use(event: dict, sm: StateManager) -> None:
 def _handle_stop(event: dict, sm: StateManager) -> None:
     state = _load_or_create(event, sm)
     state.status = SessionStatus.IDLE
+    if state.turn_started_at:
+        state.last_turn_duration = (utcnow() - state.turn_started_at).total_seconds()
     state.turn_started_at = None
     state.last_event = "Stop"
     state.last_event_at = utcnow()
