@@ -8,9 +8,9 @@ from textual.widgets import Static, Input
 
 
 SETTINGS = [
-    ("enabled", "Notifications", True),
+    ("enabled", "Notify on finish", True),
     ("terminal_bell", "Terminal bell", True),
-    ("macos_alert", "macOS alert", False),
+    ("macos_alert", "macOS notification", False),
     ("system_sound", "System sound", False),
 ]
 
@@ -83,6 +83,10 @@ class NotificationSettings(ModalScreen[dict | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="settings-dialog"):
             yield Static("Notification Settings", id="settings-title")
+            yield Static(
+                "[dim]Alert when a turn finishes after exceeding the timer[/]",
+                classes="setting-line",
+            )
             for i, (key, label, _) in enumerate(SETTINGS):
                 yield Static("", id=f"row-{i}", classes="setting-line")
             with Horizontal(id="timer-container", classes="timer-row"):

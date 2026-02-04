@@ -105,9 +105,9 @@ def _format_compact(now: datetime, since: datetime) -> str:
         return f"{secs}s"
     mins = secs // 60
     if mins < 60:
-        return f"{mins}m"
+        return f"{mins}m{secs % 60:02d}s"
     hours = mins // 60
-    return f"{hours}h{mins % 60}m"
+    return f"{hours}h{mins % 60:02d}m"
 
 
 def _format_context(tokens: int, model: str | None) -> Text:
