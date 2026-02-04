@@ -193,6 +193,7 @@ def _handle_session_start(event: dict, sm: StateManager) -> None:
     now = utcnow()
     state = SessionState(
         session_id=session_id,
+        status=SessionStatus.IDLE,
         cwd=event.get("cwd", ""),
         permission_mode=event.get("permission_mode", "default"),
         transcript_path=event.get("transcript_path"),
