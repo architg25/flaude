@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 
 class SessionStatus(str, Enum):
+    NEW = "new"
     WORKING = "working"
     IDLE = "idle"
     WAITING_PERMISSION = "waiting_permission"

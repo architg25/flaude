@@ -17,6 +17,7 @@ MODEL_LIMITS = {
 DEFAULT_LIMIT = 200_000
 
 STATUS_LABELS = {
+    SessionStatus.NEW: ("NEW", "blue bold"),
     SessionStatus.WORKING: ("RUNNING", "green bold"),
     SessionStatus.IDLE: ("IDLE", "dim"),
     SessionStatus.WAITING_PERMISSION: ("PERMISSION", "yellow bold"),
@@ -50,9 +51,10 @@ class SessionTable(DataTable):
             SessionStatus.WAITING_PERMISSION: 0,
             SessionStatus.WAITING_ANSWER: 0,
             SessionStatus.ERROR: 1,
-            SessionStatus.WORKING: 2,
-            SessionStatus.IDLE: 3,
-            SessionStatus.ENDED: 4,
+            SessionStatus.NEW: 2,
+            SessionStatus.WORKING: 3,
+            SessionStatus.IDLE: 4,
+            SessionStatus.ENDED: 5,
         }
         sorted_sessions = sorted(
             sessions.values(),
