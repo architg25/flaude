@@ -139,10 +139,8 @@ def _get_cwd_for_tty(tty: str) -> str | None:
 
 
 def _cwds_match(resolved: str, target: str) -> bool:
-    """Check if resolved cwd matches or is a parent of the target."""
-    resolved = resolved.rstrip("/")
-    target = target.rstrip("/")
-    return resolved == target or target.startswith(resolved + "/")
+    """Check if resolved cwd matches the target exactly."""
+    return resolved.rstrip("/") == target.rstrip("/")
 
 
 def _build_script(terminal: str, cwd: str) -> str | None:
