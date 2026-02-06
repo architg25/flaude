@@ -1,17 +1,32 @@
 <p align="center">
-  <img src="!/flaude.svg" width="120" alt="flaude">
+  <img src="!/flaude-animated.svg" width="120" alt="Flaude">
 </p>
 
-## flaude
+## Flaude
+
+A portmanteau of "flawed" and "Claude" — because anything that passes through me picks up a few imperfections along the way. Powered by Claude, it occasionally achieves flawlessness, but true to its namesake, flawed is the default setting.
 
 A TUI dashboard for monitoring multiple concurrent Claude Code sessions.
 
+### Features
+
+- **Live session dashboard** -- status, context usage, uptime, and model info for all running sessions at a glance
+- **Terminal navigation** -- jump to any session's terminal tab/window with a keypress (iTerm2, Ghostty, Terminal.app, Warp, IntelliJ)
+- **Session launcher** -- start new Claude sessions from the dashboard with directory autocomplete
+- **Notification system** -- terminal bell, macOS notifications, and system sounds when long-running turns finish
+- **Activity log** -- tail session transcripts in real time with three verbosity modes (All / Summary / Tools)
+- **Session detail panel** -- full session info, pending questions with answer options, context token ratio
+- **Monitor-only hooks** -- never blocks Claude Code; users approve permissions in their own terminal as usual
+- **Rules engine** -- YAML-based rules to hard-deny dangerous commands (e.g. `rm -rf /`)
+- **Theme customization** -- Textual theme picker with persistence across restarts
+- **Ghost session cleanup** -- stale sessions auto-removed via process checks and hard timeouts
+
 ### What it does
 
-flaude installs lightweight hooks into Claude Code that report session activity to a shared state directory. A Textual-based dashboard polls that state and displays a live overview of all running sessions -- status, context usage, pending questions, transcripts, and more.
+Flaude installs lightweight hooks into Claude Code that report session activity to a shared state directory. A Textual-based dashboard polls that state and displays a live overview of all running sessions -- status, context usage, pending questions, transcripts, and more.
 
 ```
-Claude Code sessions         flaude
+Claude Code sessions         Flaude
 ┌──────────┐
 │ session A │──hook──┐
 └──────────┘        │     ┌──────────────────┐
@@ -23,7 +38,7 @@ Claude Code sessions         flaude
 └──────────┘
 ```
 
-Hooks are **monitor-only**. flaude never blocks Claude Code's normal operation (except for hard-deny rules on dangerous commands like `rm -rf /`). Users approve permissions in their Claude terminal as usual.
+Hooks are **monitor-only**. Flaude never blocks Claude Code's normal operation (except for hard-deny rules on dangerous commands like `rm -rf /`). Users approve permissions in their Claude terminal as usual.
 
 ### Install
 
@@ -92,7 +107,7 @@ Pressing `n` opens a directory picker with tab-completion and arrow-key navigati
 
 #### Notification system
 
-flaude alerts you when a long-running turn finishes. Configure via `S`:
+Flaude alerts you when a long-running turn finishes. Configure via `S`:
 
 - **Terminal bell** -- rings the terminal bell (on by default)
 - **macOS notification** -- native notification center alert
