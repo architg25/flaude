@@ -164,6 +164,12 @@ def cmd_uninstall(args: argparse.Namespace) -> None:
         if rules_dir.exists() and not any(rules_dir.iterdir()):
             rules_dir.rmdir()
 
+    # pip uninstall
+    import subprocess
+
+    print()
+    subprocess.run([sys.executable, "-m", "pip", "uninstall", "flaude"])
+
 
 def cmd_run(args: argparse.Namespace) -> None:
     """Launch the TUI dashboard."""

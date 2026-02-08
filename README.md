@@ -25,7 +25,7 @@ A lightweight TUI dashboard for monitoring multiple concurrent Claude Code sessi
 Requires **Python 3.11+** and **macOS** (terminal navigation uses AppleScript).
 
 ```
-pip install git+https://ghe.spotify.net/architg/flaude.git
+pip install git+ssh://git@ghe.spotify.net/architg/flaude.git
 flaude init
 ```
 
