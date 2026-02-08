@@ -42,8 +42,10 @@ Hooks are **monitor-only**. Flaude never blocks Claude Code's normal operation (
 
 ### Install
 
+Requires **Python 3.11+** and **macOS** (terminal navigation uses AppleScript).
+
 ```
-pip install .
+pip install git+https://ghe.spotify.net/architg/flaude.git
 flaude init
 ```
 
