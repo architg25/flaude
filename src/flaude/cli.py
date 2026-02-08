@@ -191,6 +191,36 @@ def cmd_run(args: argparse.Namespace) -> None:
             DASHBOARD_PID.unlink(missing_ok=True)
 
 
+def _format_uptime(started_at: datetime) -> str:
+    delta = datetime.now() - started_at
+    secs = int(delta.total_seconds())
+    if secs < 60:
+        return f"{secs}s"
+    mins = secs // 60
+    if mins < 60:
+        return f"{mins}m{secs % 60}s"
+    hrs = mins // 60
+    return f"{hrs}h{mins % 60}m"
+
+
+def _format_context(tokens: int, model: str | None) -> str:
+    if not tokens:
+        return "-"
+    model_limits = {"opus": 1_000_000, "sonnet": 200_000, "haiku": 200_000}
+    limit = 200_000
+    if model:
+        for key, val in model_limits.items():
+            if key in model:
+                limit = val
+                break
+    pct = int(tokens / limit * 100)
+    if tokens >= 1_000_000:
+        return f"{tokens / 1_000_000:.1f}M ({pct}%)"
+    if tokens >= 1_000:
+        return f"{tokens // 1_000}K ({pct}%)"
+    return f"{tokens} ({pct}%)"
+
+
 def cmd_status(args: argparse.Namespace) -> None:
     """Quick non-TUI status table."""
     from flaude.state.manager import StateManager
@@ -206,21 +236,29 @@ def cmd_status(args: argparse.Namespace) -> None:
     print(f"Dashboard: {'running' if dashboard_running else 'not running'}")
     print()
 
-    fmt = "{:<8} {:<12} {:<30} {:<20} {:<6}"
-    print(fmt.format("Status", "Session", "Project", "Last Tool", "Tools"))
-    print("-" * 78)
+    fmt = "{:<12} {:<10} {:<20} {:<12} {:<10} {:<14} {:<8}"
+    print(
+        fmt.format(
+            "Status", "Session", "Project", "Terminal", "Mode", "Context", "Uptime"
+        )
+    )
+    print("-" * 88)
 
     for sid, state in sorted(sessions.items(), key=lambda x: x[1].started_at):
         project = Path(state.cwd).name if state.cwd else "?"
-        last_tool = state.last_tool.name if state.last_tool else "-"
-        tool_count = sum(state.tool_stats.values())
+        terminal = state.terminal or "-"
+        mode = state.permission_mode or "default"
+        context = _format_context(state.context_tokens, state.model)
+        uptime = _format_uptime(state.started_at)
         print(
             fmt.format(
-                state.status.value[:8],
-                sid[:12],
-                project[:30],
-                last_tool[:20],
-                str(tool_count),
+                state.status.value[:12],
+                sid[:10],
+                project[:20],
+                terminal[:12],
+                mode[:10],
+                context[:14],
+                uptime,
             )
         )
 
