@@ -219,6 +219,8 @@ class FlaudeApp(App):
 
         notif = self._config.get("notifications", {})
         project = Path(state.cwd).name if state.cwd else state.session_id[:8]
+        duration = _format_alert_duration(state.last_turn_duration)
+        prompt_preview = (state.last_prompt or "")[:80].replace('"', '\\"')
 
         if notif.get("terminal_bell", True):
             self.bell()
@@ -233,8 +235,8 @@ class FlaudeApp(App):
                 [
                     "osascript",
                     "-e",
-                    f'display notification "Turn finished after {int(state.last_turn_duration // 60)}m" '
-                    f'with title "flaude" subtitle "{project}"',
+                    f'display notification "{prompt_preview}" '
+                    f'with title "Flaude — {project}" subtitle "Finished in {duration}"',
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -282,3 +284,10 @@ class FlaudeApp(App):
 
     def action_help(self) -> None:
         self.push_screen(HelpDialog())
+
+
+def _format_alert_duration(seconds: float) -> str:
+    mins = int(seconds // 60)
+    if mins < 60:
+        return f"{mins}m"
+    return f"{mins // 60}h{mins % 60}m"
