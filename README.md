@@ -17,7 +17,6 @@ A lightweight TUI dashboard for monitoring multiple concurrent Claude Code sessi
 - **Activity log** -- tail session transcripts in real time with three verbosity modes (All / Summary / Tools)
 - **Session detail panel** -- full session info, pending questions with answer options, context token ratio
 - **Monitor-only hooks** -- never blocks Claude Code; users approve permissions in their own terminal as usual
-- **Rules engine** -- YAML-based rules to hard-deny dangerous commands (e.g. `rm -rf /`)
 - **Theme customization** -- Textual theme picker with persistence across restarts
 - **Ghost session cleanup** -- stale sessions auto-removed via process checks and hard timeouts
 
@@ -38,7 +37,7 @@ Claude Code sessions         Flaude
 └──────────┘
 ```
 
-Hooks are **monitor-only**. Flaude never blocks Claude Code's normal operation (except for hard-deny rules on dangerous commands like `rm -rf /`). Users approve permissions in their Claude terminal as usual.
+Hooks are **monitor-only**. Flaude never blocks Claude Code's normal operation. Users approve permissions in their Claude terminal as usual.
 
 ### Install
 
@@ -49,7 +48,7 @@ pip install git+https://ghe.spotify.net/architg/flaude.git
 flaude init
 ```
 
-`flaude init` registers hooks in `~/.claude/settings.json` (backs up the file first) and copies default rules to `~/.config/flaude/rules.yaml`.
+`flaude init` registers hooks in `~/.claude/settings.json` (backs up the file first).
 
 ### Usage
 
@@ -145,8 +144,6 @@ The hook reads the session's transcript JSONL to extract the latest token usage 
 
 ### Configuration
 
-**`~/.config/flaude/rules.yaml`** -- Rules engine for tool call evaluation. First-match-wins. Actions: `allow`, `deny`. Supports regex matching on tool inputs with `$CWD` substitution. Default rules allow safe reads, common git/shell commands, and block destructive operations.
-
 **`~/.config/flaude/config.yaml`** -- Persists theme, log mode, and notification settings across restarts. Created automatically.
 
 ### Environment variables
@@ -154,7 +151,6 @@ The hook reads the session's transcript JSONL to extract the latest token usage 
 | Variable                       | Default                        | Description                                     |
 | ------------------------------ | ------------------------------ | ----------------------------------------------- |
 | `FLAUDE_STATE_DIR`             | `/tmp/flaude`                  | Root directory for state files                  |
-| `FLAUDE_RULES_PATH`            | `~/.config/flaude/rules.yaml`  | Path to rules YAML                              |
 | `FLAUDE_CONFIG_PATH`           | `~/.config/flaude/config.yaml` | Path to config YAML                             |
 | `FLAUDE_STALE_SESSION_TIMEOUT` | `1800`                         | Seconds before a silent session is hard-removed |
 | `FLAUDE_TUI_REFRESH_INTERVAL`  | `1.0`                          | Dashboard poll interval in seconds              |
@@ -169,7 +165,6 @@ Hook events (stdin JSON)
   hooks/dispatcher.py     ← Claude Code invokes on every event
         │
         ├─▶ state/manager.py   ← Atomic write to /tmp/flaude/state/<session>.json
-        ├─▶ rules/engine.py    ← Evaluate tool call, emit deny if matched
         └─▶ logs/activity.log  ← Append one-line log entry
 
   tui/app.py              ← Polls state files every 1s, updates widgets
