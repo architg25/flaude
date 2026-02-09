@@ -14,6 +14,7 @@ from flaude.constants import (
     HOOK_TIMEOUT_DEFAULT,
     RULES_PATH,
     SESSIONS_DIR,
+    STATE_DIR,
     DASHBOARD_PID,
     ensure_dirs,
 )
@@ -157,14 +158,12 @@ def cmd_uninstall(args: argparse.Namespace) -> None:
     print("flaude hooks removed.")
 
     if args.purge:
-        import shutil as _shutil
-
         config_dir = Path(os.path.expanduser("~/.config/flaude"))
         if config_dir.exists():
-            _shutil.rmtree(config_dir)
+            shutil.rmtree(config_dir)
             print(f"Removed {config_dir}")
         if STATE_DIR.exists():
-            _shutil.rmtree(STATE_DIR)
+            shutil.rmtree(STATE_DIR)
             print(f"Removed {STATE_DIR}")
 
         # Check for env vars the user may have set
