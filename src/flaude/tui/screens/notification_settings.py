@@ -8,7 +8,7 @@ from textual.widgets import Static, Input
 
 
 SETTINGS = [
-    ("enabled", "Notify on finish", True),
+    ("enabled", "Notify on finish", False),
     ("terminal_bell", "Terminal bell", True),
     ("macos_alert", "macOS notification", False),
     ("system_sound", "System sound", False),

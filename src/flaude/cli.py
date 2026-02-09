@@ -157,12 +157,31 @@ def cmd_uninstall(args: argparse.Namespace) -> None:
     print("flaude hooks removed.")
 
     if args.purge:
-        if RULES_PATH.exists():
-            RULES_PATH.unlink()
-            print(f"Removed {RULES_PATH}")
-        rules_dir = RULES_PATH.parent
-        if rules_dir.exists() and not any(rules_dir.iterdir()):
-            rules_dir.rmdir()
+        import shutil as _shutil
+
+        config_dir = Path(os.path.expanduser("~/.config/flaude"))
+        if config_dir.exists():
+            _shutil.rmtree(config_dir)
+            print(f"Removed {config_dir}")
+        if STATE_DIR.exists():
+            _shutil.rmtree(STATE_DIR)
+            print(f"Removed {STATE_DIR}")
+
+        # Check for env vars the user may have set
+        env_vars = [
+            "FLAUDE_STATE_DIR",
+            "FLAUDE_CONFIG_PATH",
+            "FLAUDE_RULES_PATH",
+            "FLAUDE_STALE_SESSION_TIMEOUT",
+            "FLAUDE_TUI_REFRESH_INTERVAL",
+            "FLAUDE_TERMINAL",
+        ]
+        set_vars = [v for v in env_vars if os.environ.get(v)]
+        if set_vars:
+            print("\nThe following environment variables are still set in your shell:")
+            for v in set_vars:
+                print(f"  unset {v}")
+            print("Add the above to your shell profile to fully clean up.")
 
     # pip uninstall
     import subprocess

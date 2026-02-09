@@ -133,7 +133,7 @@ class FlaudeApp(App):
 
         # Alert when a long turn finishes
         notif = self._config.get("notifications", {})
-        if notif.get("enabled", True):
+        if notif.get("enabled", False):
             threshold = notif.get("long_turn_minutes", 5) * 60
             for sid, state in active.items():
                 if (
@@ -244,7 +244,7 @@ class FlaudeApp(App):
 
     def action_toggle_notifications(self) -> None:
         notif = self._config.setdefault("notifications", {})
-        enabled = not notif.get("enabled", True)
+        enabled = not notif.get("enabled", False)
         notif["enabled"] = enabled
         try:
             _save_config(self._config)
@@ -260,7 +260,7 @@ class FlaudeApp(App):
         current = self._config.get(
             "notifications",
             {
-                "enabled": True,
+                "enabled": False,
                 "terminal_bell": True,
                 "macos_alert": False,
                 "system_sound": False,
