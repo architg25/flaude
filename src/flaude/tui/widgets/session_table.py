@@ -44,6 +44,15 @@ class SessionTable(DataTable):
         self.clear()
 
         if not sessions:
+            self.add_row(
+                Text("No sessions", style="dim"),
+                "",
+                Text("start claude or press n", style="dim italic"),
+                "",
+                "",
+                "",
+                "",
+            )
             return
 
         # Sort: waiting first, then working, then idle, then ended

@@ -53,7 +53,9 @@ class FlaudeApp(App):
         Binding("g", "goto_session", "Go to Session"),
         Binding("n", "new_session", "New Claude Session"),
         Binding("l", "cycle_log_mode", "Log Mode"),
-        Binding("s", "toggle_notifications", "Notifications"),
+        Binding(
+            "s", "toggle_notifications", "Notif Toggle/Settings", key_display="s/S"
+        ),
         Binding("S", "notification_settings", "Notification Settings", show=False),
         Binding("t", "change_theme", "Theme"),
         Binding("question_mark", "help", "Help"),
@@ -126,13 +128,16 @@ class FlaudeApp(App):
             if s.status
             in (SessionStatus.WAITING_PERMISSION, SessionStatus.WAITING_ANSWER)
         )
+        notif = self._config.get("notifications", {})
+        notif_icon = "🔔" if notif.get("enabled", False) else "🔕"
         if waiting:
-            self.title = f"flaude ({len(active)} sessions, {waiting} waiting)"
+            self.title = (
+                f"flaude ({len(active)} sessions, {waiting} waiting) {notif_icon}"
+            )
         else:
-            self.title = f"flaude ({len(active)} sessions)"
+            self.title = f"flaude ({len(active)} sessions) {notif_icon}"
 
         # Alert when a long turn finishes
-        notif = self._config.get("notifications", {})
         if notif.get("enabled", False):
             threshold = notif.get("long_turn_minutes", 5) * 60
             for sid, state in active.items():
