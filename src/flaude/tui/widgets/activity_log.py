@@ -145,7 +145,7 @@ class ActivityLog(RichLog):
                 name = item.get("name", "?")
                 tool_input = item.get("input", {})
                 summary = _summarize_tool_input(name, tool_input)
-                return f"[bold cyan][tool][/] {name}: {summary}"
+                return f"[cyan bold]tool[/] [dim]{name}[/] {summary}"
 
             elif item_type == "tool_result":
                 continue

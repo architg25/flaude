@@ -20,10 +20,10 @@ class HelpDialog(ModalScreen[None]):
         align: center middle;
     }
     #help-dialog {
-        width: 55;
+        width: 60;
         height: auto;
         padding: 1 2;
-        border: solid $primary;
+        border: round $primary;
         background: $surface;
     }
     #help-title {

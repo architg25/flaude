@@ -71,11 +71,13 @@ class PermissionPanel(Vertical):
             no_perms.display = True
             perm_list.display = False
             self.border_title = "Waiting"
+            self.remove_class("has-waiting")
             return
 
         no_perms.display = False
         perm_list.display = True
         self.border_title = f"Waiting ({len(waiting)})"
+        self.add_class("has-waiting")
 
         perm_list.clear()
         for sid, state in waiting.items():

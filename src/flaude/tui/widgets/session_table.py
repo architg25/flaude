@@ -47,7 +47,10 @@ class SessionTable(DataTable):
             self.add_row(
                 Text("No sessions", style="dim"),
                 "",
-                Text("start claude or press n", style="dim italic"),
+                Text(
+                    "press n or start claude (flaude init if hooks not set up)",
+                    style="dim italic",
+                ),
                 "",
                 "",
                 "",

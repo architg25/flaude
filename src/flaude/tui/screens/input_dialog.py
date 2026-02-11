@@ -24,10 +24,10 @@ class InputDialog(ModalScreen[str | None]):
         align: center middle;
     }
     #input-dialog {
-        width: 70;
+        width: 60;
         height: auto;
         padding: 1 2;
-        border: solid $primary;
+        border: round $primary;
         background: $surface;
     }
     #input-label {

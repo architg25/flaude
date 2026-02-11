@@ -12,40 +12,59 @@ Screen {
     layout: vertical;
 }
 
+/* ── Session Table (primary) ── */
 #session-table {
     height: 2fr;
     margin: 0 1;
-    border: solid $primary;
+    border: round $primary;
+    border-title-color: $text;
+    border-title-style: bold;
+    padding: 0 1;
 }
 
+/* ── Permission/Waiting Panel (dormant) ── */
 #permission-panel {
     height: 1fr;
     min-height: 5;
     margin: 0 1;
-    border: solid $warning;
+    border: round $surface-lighten-1;
+    border-title-color: $text-muted;
 }
 
-#activity-log {
-    height: 1fr;
-    margin: 0 1;
-    border: solid $surface;
-}
-
-#session-detail {
-    width: 1fr;
-    min-width: 35;
-    margin: 0 1 0 0;
-    padding: 1 2;
-    border: solid $primary;
-    overflow-y: auto;
+/* When sessions are actually waiting, escalate visually */
+#permission-panel.has-waiting {
+    border: round $warning;
+    border-title-color: $warning;
+    border-title-style: bold;
 }
 
 PermissionPanel .urgent {
-    background: $warning 20%;
+    background: $warning 15%;
 }
 
 #no-permissions {
     color: $text-muted;
     text-style: italic;
     padding: 1 2;
+}
+
+/* ── Activity Log (secondary) ── */
+#activity-log {
+    height: 1fr;
+    margin: 0 1;
+    border: round $surface-lighten-1;
+    border-title-color: $text-muted;
+    padding: 0 1;
+}
+
+/* ── Detail Panel (primary) ── */
+#session-detail {
+    width: 1fr;
+    min-width: 35;
+    margin: 0 1 0 0;
+    padding: 1 2;
+    border: round $primary;
+    border-title-color: $text;
+    border-title-style: bold;
+    overflow-y: auto;
 }

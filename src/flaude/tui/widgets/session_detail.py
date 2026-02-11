@@ -5,12 +5,22 @@ from pathlib import Path
 from textual.widgets import Static
 
 from flaude.constants import utcnow
-from flaude.state.models import SessionState
+from flaude.state.models import SessionState, SessionStatus
 
 _MODEL_LIMITS = {
     "claude-opus-4-6": 1_000_000,
     "claude-sonnet-4-6": 200_000,
     "claude-haiku-4-5": 200_000,
+}
+
+_STATUS_STYLES = {
+    SessionStatus.NEW: "blue bold",
+    SessionStatus.WORKING: "green bold",
+    SessionStatus.IDLE: "dim",
+    SessionStatus.WAITING_PERMISSION: "yellow bold",
+    SessionStatus.WAITING_ANSWER: "cyan bold",
+    SessionStatus.ERROR: "red bold",
+    SessionStatus.ENDED: "dim",
 }
 
 
@@ -22,31 +32,45 @@ class SessionDetail(Static):
 
     def update_session(self, state: SessionState | None) -> None:
         if state is None:
-            self.update("[dim]Select a session to view details[/]")
+            self.update("[dim italic]Select a session to view details[/]")
             self.border_title = "Detail"
             return
 
         project = Path(state.cwd).name if state.cwd else "?"
-        self.border_title = f"Detail — {project}"
+        self.border_title = f"Detail -- {project}"
 
-        lines = []
+        lines: list[str] = []
 
-        # Session info
-        lines.append(f"[bold]Session[/]     {state.session_id}")
-        lines.append(f"[bold]Status[/]      {state.status.value}")
-        lines.append(f"[bold]Project[/]     {project}")
-        lines.append(f"[bold]Directory[/]   {state.cwd}")
-        lines.append(f"[bold]Terminal[/]    {state.terminal or '?'}")
-        lines.append(f"[bold]Mode[/]        {state.permission_mode}")
+        # ── Session ──
+        lines.append("[dim bold]SESSION[/]")
+        lines.append(f"  {state.session_id}")
+        lines.append(f"  {state.cwd}")
+
+        lines.append("")
+
+        # ── Status ──
+        style = _STATUS_STYLES.get(state.status, "dim")
+        lines.append("[dim bold]STATUS[/]")
+        lines.append(f"  [{style}]{state.status.value}[/]")
         if state.model:
-            lines.append(f"[bold]Model[/]       {state.model}")
-        lines.append(f"[bold]Started[/]     {state.started_at.strftime('%H:%M')}")
-        lines.append(f"[bold]Uptime[/]      {_format_uptime(state.started_at)}")
+            lines.append(f"  [dim]Model[/]  {state.model}")
+        lines.append(f"  [dim]Mode[/]   {state.permission_mode}")
+        lines.append(f"  [dim]Term[/]   {state.terminal or '?'}")
+
+        lines.append("")
+
+        # ── Timing ──
+        lines.append("[dim bold]TIMING[/]")
+        lines.append(f"  [dim]Up[/]     {_format_uptime(state.started_at)}")
+        lines.append(f"  [dim]Since[/]  {state.started_at.strftime('%H:%M')}")
         if state.turn_started_at:
             turn_secs = int((utcnow() - state.turn_started_at).total_seconds())
             mins, secs = divmod(turn_secs, 60)
-            lines.append(f"[bold]Turn[/]        {mins}m{secs:02d}s")
+            lines.append(f"  [dim]Turn[/]   {mins}m{secs:02d}s")
+
+        # ── Context ──
         if state.context_tokens > 0:
+            lines.append("")
             ctx = state.context_tokens
             if ctx >= 1_000_000:
                 ctx_str = f"{ctx / 1_000_000:.1f}M"
@@ -59,31 +83,39 @@ class SessionDetail(Static):
                 limit_str = f"{limit // 1_000_000}M"
             else:
                 limit_str = f"{limit // 1_000}K"
-            lines.append(f"[bold]Context[/]     {ctx_str} / {limit_str}")
+            ratio = state.context_tokens / limit if limit else 0
+            if ratio > 0.8:
+                bar_style = "red bold"
+            elif ratio > 0.5:
+                bar_style = "yellow"
+            else:
+                bar_style = "green"
+            lines.append("[dim bold]CONTEXT[/]")
+            lines.append(f"  [{bar_style}]{ctx_str}[/] / {limit_str}")
 
-        # Last prompt
+        # ── Last Prompt ──
         if state.last_prompt:
             lines.append("")
-            lines.append("[bold]Last Prompt[/]")
+            lines.append("[dim bold]LAST PROMPT[/]")
             lines.append(f"  [italic]{state.last_prompt}[/]")
 
-        # Pending question
+        # ── Pending Question ──
         pq = state.pending_question
         if pq:
             lines.append("")
             if "questions" in pq:
-                lines.append("[bold]Pending Question[/]")
+                lines.append("[yellow bold]PENDING QUESTION[/]")
                 for q in pq["questions"]:
                     lines.append(f"  [italic]{q.get('question', '')}[/]")
                     for opt in q.get("options", []):
                         label = opt.get("label", "")
                         desc = opt.get("description", "")
                         if desc:
-                            lines.append(f"    - [bold]{label}[/]: {desc}")
+                            lines.append(f"    [dim]-[/] [bold]{label}[/]: {desc}")
                         else:
-                            lines.append(f"    - [bold]{label}[/]")
+                            lines.append(f"    [dim]-[/] [bold]{label}[/]")
             else:
-                lines.append("[bold]Plan approval needed[/]")
+                lines.append("[yellow bold]PLAN APPROVAL NEEDED[/]")
 
         self.update("\n".join(lines))
 
