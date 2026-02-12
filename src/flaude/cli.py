@@ -193,12 +193,12 @@ def cmd_run(args: argparse.Namespace) -> None:
     """Launch the TUI dashboard."""
     ensure_dirs()
 
-    # Overwrite process name from "python3.13" to "flaude".
+    # Overwrite process name from "python3.13" to "Flaude".
     # iTerm2 shows this as the tab title automatically.
     try:
         from setproctitle import setproctitle
 
-        setproctitle("flaude")
+        setproctitle("Flaude")
     except ImportError:
         pass
 

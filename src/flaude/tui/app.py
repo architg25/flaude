@@ -46,7 +46,7 @@ class FlaudeApp(App):
     """Claude Code session manager dashboard."""
 
     CSS_PATH = "app.tcss"
-    TITLE = "🤖 flaude"
+    TITLE = "🤖 Flaude"
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
@@ -132,10 +132,10 @@ class FlaudeApp(App):
         notif_icon = "🔔" if notif.get("enabled", False) else "🔕"
         if waiting:
             self.title = (
-                f"flaude ({len(active)} sessions, {waiting} waiting) {notif_icon}"
+                f"Flaude ({len(active)} sessions, {waiting} waiting) {notif_icon}"
             )
         else:
-            self.title = f"flaude ({len(active)} sessions) {notif_icon}"
+            self.title = f"Flaude ({len(active)} sessions) {notif_icon}"
 
         # Alert when a long turn finishes
         if notif.get("enabled", False):
