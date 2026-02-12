@@ -14,13 +14,13 @@ _MODEL_LIMITS = {
 }
 
 _STATUS_STYLES = {
-    SessionStatus.NEW: "blue bold",
-    SessionStatus.WORKING: "green bold",
-    SessionStatus.IDLE: "dim",
-    SessionStatus.WAITING_PERMISSION: "yellow bold",
-    SessionStatus.WAITING_ANSWER: "cyan bold",
-    SessionStatus.ERROR: "red bold",
-    SessionStatus.ENDED: "dim",
+    SessionStatus.NEW: "$accent bold",
+    SessionStatus.WORKING: "$success bold",
+    SessionStatus.IDLE: "$text-muted",
+    SessionStatus.WAITING_PERMISSION: "$warning bold",
+    SessionStatus.WAITING_ANSWER: "$accent bold",
+    SessionStatus.ERROR: "$error bold",
+    SessionStatus.ENDED: "$text-muted",
 }
 
 
@@ -85,11 +85,11 @@ class SessionDetail(Static):
                 limit_str = f"{limit // 1_000}K"
             ratio = state.context_tokens / limit if limit else 0
             if ratio > 0.8:
-                bar_style = "red bold"
+                bar_style = "$error bold"
             elif ratio > 0.5:
-                bar_style = "yellow"
+                bar_style = "$warning"
             else:
-                bar_style = "green"
+                bar_style = "$success"
             lines.append("[dim bold]CONTEXT[/]")
             lines.append(f"  [{bar_style}]{ctx_str}[/] / {limit_str}")
 
@@ -104,7 +104,7 @@ class SessionDetail(Static):
         if pq:
             lines.append("")
             if "questions" in pq:
-                lines.append("[yellow bold]PENDING QUESTION[/]")
+                lines.append("[$warning bold]PENDING QUESTION[/]")
                 for q in pq["questions"]:
                     lines.append(f"  [italic]{q.get('question', '')}[/]")
                     for opt in q.get("options", []):
@@ -115,7 +115,7 @@ class SessionDetail(Static):
                         else:
                             lines.append(f"    [dim]-[/] [bold]{label}[/]")
             else:
-                lines.append("[yellow bold]PLAN APPROVAL NEEDED[/]")
+                lines.append("[$warning bold]PLAN APPROVAL NEEDED[/]")
 
         self.update("\n".join(lines))
 

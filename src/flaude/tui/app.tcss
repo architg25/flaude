@@ -22,6 +22,7 @@ Screen {
     padding: 0 1;
 }
 
+
 /* ── Permission/Waiting Panel (dormant) ── */
 #permission-panel {
     height: 1fr;

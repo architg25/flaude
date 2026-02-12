@@ -16,14 +16,15 @@ MODEL_LIMITS = {
 }
 DEFAULT_LIMIT = 200_000
 
-STATUS_LABELS = {
-    SessionStatus.NEW: ("NEW", "blue bold"),
-    SessionStatus.WORKING: ("RUNNING", "green bold"),
-    SessionStatus.IDLE: ("IDLE", "dim"),
-    SessionStatus.WAITING_PERMISSION: ("PERMISSION", "yellow bold"),
-    SessionStatus.WAITING_ANSWER: ("INPUT", "cyan bold"),
-    SessionStatus.ERROR: ("ERROR", "red bold"),
-    SessionStatus.ENDED: ("ENDED", "dim"),
+# Maps status -> (label, theme_var, bold)
+STATUS_THEME = {
+    SessionStatus.NEW: ("NEW", "accent", True),
+    SessionStatus.WORKING: ("RUNNING", "success", True),
+    SessionStatus.IDLE: ("IDLE", "text-muted", False),
+    SessionStatus.WAITING_PERMISSION: ("PERMISSION", "warning", True),
+    SessionStatus.WAITING_ANSWER: ("INPUT", "accent", True),
+    SessionStatus.ERROR: ("ERROR", "error", True),
+    SessionStatus.ENDED: ("ENDED", "text-muted", False),
 }
 
 
@@ -74,9 +75,14 @@ class SessionTable(DataTable):
         )
 
         now = utcnow()
+        css = self.app.get_css_variables()
         restore_row = 0
         for idx, state in enumerate(sorted_sessions):
-            label, style = STATUS_LABELS.get(state.status, ("?", "dim"))
+            label, theme_var, bold = STATUS_THEME.get(
+                state.status, ("?", "text-muted", False)
+            )
+            color = css.get(theme_var, "")
+            style = f"{color} bold" if bold else color
             if state.status == SessionStatus.WORKING and state.turn_started_at:
                 duration = _format_compact(now, state.turn_started_at)
             else:
@@ -86,7 +92,7 @@ class SessionTable(DataTable):
             uptime = _format_uptime(now, state.started_at)
             term = state.terminal or "?"
             mode = state.permission_mode
-            context = _format_context(state.context_tokens, state.model)
+            context = _format_context(state.context_tokens, state.model, css)
 
             self.add_row(
                 status_text,
@@ -124,9 +130,9 @@ def _format_compact(now: datetime, since: datetime) -> str:
     return f"{hours}h{mins % 60:02d}m"
 
 
-def _format_context(tokens: int, model: str | None) -> Text:
+def _format_context(tokens: int, model: str | None, css: dict) -> Text:
     if tokens <= 0:
-        return Text("-", style="dim")
+        return Text("-", style=css.get("text-muted", "dim"))
     if tokens >= 1_000_000:
         label = f"{tokens / 1_000_000:.1f}M"
     elif tokens >= 1_000:
@@ -136,11 +142,11 @@ def _format_context(tokens: int, model: str | None) -> Text:
     limit = MODEL_LIMITS.get(model or "", DEFAULT_LIMIT)
     ratio = tokens / limit if limit else 0
     if ratio > 0.8:
-        style = "red bold"
+        style = f"{css.get('error', 'red')} bold"
     elif ratio > 0.5:
-        style = "yellow"
+        style = css.get("warning", "yellow")
     else:
-        style = "green"
+        style = css.get("success", "green")
     return Text(label, style=style)
 
 
