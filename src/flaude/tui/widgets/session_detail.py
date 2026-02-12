@@ -51,22 +51,22 @@ class SessionDetail(Static):
         # ── Status ──
         style = _STATUS_STYLES.get(state.status, "dim")
         lines.append("[dim bold]STATUS[/]")
-        lines.append(f"  [{style}]{state.status.value}[/]")
+        lines.append(f"  [dim]Status[/]  [{style}]{state.status.value.upper()}[/]")
         if state.model:
-            lines.append(f"  [dim]Model[/]  {state.model}")
-        lines.append(f"  [dim]Mode[/]   {state.permission_mode}")
-        lines.append(f"  [dim]Term[/]   {state.terminal or '?'}")
+            lines.append(f"  [dim]Model [/]  {state.model}")
+        lines.append(f"  [dim]Mode  [/]  {state.permission_mode}")
+        lines.append(f"  [dim]Term  [/]  {state.terminal or '?'}")
 
         lines.append("")
 
         # ── Timing ──
         lines.append("[dim bold]TIMING[/]")
-        lines.append(f"  [dim]Up[/]     {_format_uptime(state.started_at)}")
-        lines.append(f"  [dim]Since[/]  {state.started_at.strftime('%H:%M')}")
+        lines.append(f"  [dim]Up    [/]  {_format_uptime(state.started_at)}")
+        lines.append(f"  [dim]Since [/]  {state.started_at.strftime('%H:%M')}")
         if state.turn_started_at:
             turn_secs = int((utcnow() - state.turn_started_at).total_seconds())
             mins, secs = divmod(turn_secs, 60)
-            lines.append(f"  [dim]Turn[/]   {mins}m{secs:02d}s")
+            lines.append(f"  [dim]Turn  [/]  {mins}m{secs:02d}s")
 
         # ── Context ──
         if state.context_tokens > 0:
