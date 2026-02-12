@@ -43,8 +43,8 @@ class SessionDetail(Static):
 
         # ── Session ──
         lines.append("[dim bold]SESSION[/]")
-        lines.append(f"  {state.session_id}")
-        lines.append(f"  {state.cwd}")
+        lines.append(f"  [dim]ID    [/]  {state.session_id}")
+        lines.append(f"  [dim]Dir   [/]  {state.cwd}")
 
         lines.append("")
 
