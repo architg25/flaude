@@ -116,6 +116,8 @@ class SessionDetail(Static):
                             lines.append(f"    [dim]-[/] [bold]{label}[/]")
             else:
                 lines.append("[$warning bold]PLAN APPROVAL NEEDED[/]")
+                for p in pq.get("allowedPrompts", []):
+                    lines.append(f"  [dim]-[/] {p.get('prompt', '')}")
 
         self.update("\n".join(lines))
 
