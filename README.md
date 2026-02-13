@@ -10,14 +10,14 @@ A lightweight TUI dashboard for monitoring multiple concurrent Claude Code sessi
 
 ### Features
 
-- **Live session dashboard** -- status, context usage, uptime, and model info for all running sessions at a glance
+- **Live session dashboard** -- theme-aware status colors, context usage, uptime, and model info for all running sessions
 - **Terminal navigation** -- jump to any session's terminal tab/window with a keypress (iTerm2, Ghostty, Terminal.app, Warp, IntelliJ)
 - **Session launcher** -- start new Claude sessions from the dashboard with directory autocomplete
-- **Notification system** -- terminal bell, macOS notifications, and system sounds when long-running turns finish
+- **Notification system** -- terminal bell, macOS notifications, and system sounds when long-running turns finish (off by default, 🔔/🔕 indicator in title bar)
 - **Activity log** -- tail session transcripts in real time with three verbosity modes (All / Summary / Tools)
-- **Session detail panel** -- full session info, pending questions with answer options, context token ratio
+- **Session detail panel** -- sectioned view with session info, status, timing, context ratio, last prompt, and pending questions with plan approval details
 - **Monitor-only hooks** -- never blocks Claude Code; users approve permissions in their own terminal as usual
-- **Theme customization** -- Textual theme picker with persistence across restarts
+- **Theme customization** -- all colors adapt to the selected Textual theme, with persistence across restarts
 - **Ghost session cleanup** -- stale sessions auto-removed via process checks and hard timeouts
 
 ### Install
@@ -39,7 +39,7 @@ flaude status           # Quick CLI status table (no TUI)
 flaude init             # Install hooks into Claude Code
 flaude init --dry-run   # Preview hook installation
 flaude uninstall        # Remove hooks from Claude Code
-flaude uninstall --purge # Also remove ~/.config/flaude/
+flaude uninstall --purge # Remove config, state, and pip uninstall
 ```
 
 ### Key bindings
@@ -49,8 +49,7 @@ flaude uninstall --purge # Also remove ~/.config/flaude/
 | `Enter`/`g` | Navigate to the selected session's terminal     |
 | `n`         | Launch a new Claude session (directory picker)  |
 | `l`         | Cycle activity log mode (All / Summary / Tools) |
-| `s`         | Quick toggle notifications on/off               |
-| `S`         | Notification settings dialog                    |
+| `s`/`S`     | Toggle notifications / notification settings    |
 | `t`         | Change theme (Textual theme picker with search) |
 | `?`         | Help dialog                                     |
 | `q`         | Quit                                            |

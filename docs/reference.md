@@ -4,31 +4,31 @@ Detailed documentation for Flaude. For a quick overview, see the [README](../REA
 
 ## Dashboard layout
 
-The TUI is split into a left pane and a right detail panel.
+The TUI is split into a left pane and a right detail panel. Panels use rounded borders with a tiered visual hierarchy — primary panels (sessions, detail) use the theme's primary color, the waiting panel fades when dormant and escalates to warning when sessions need attention, and the activity log stays subdued.
 
 **Left pane** (top to bottom):
 
-- **Sessions table** -- All active sessions with columns: Status, Session ID, Project, Terminal, Mode, Context, Uptime. Sessions needing attention sort to the top.
-- **Waiting panel** -- Sessions waiting for user input (permission prompts or questions). Shows question text and answer options when available.
+- **Sessions table** -- All active sessions with columns: Status, Session ID, Project, Terminal, Mode, Context, Uptime. Sessions needing attention sort to the top. When no sessions are active, shows a hint to start claude or run `flaude init`.
+- **Waiting panel** -- Sessions waiting for user input (permission prompts or questions). Shows question text and answer options when available. Border escalates to warning color only when sessions are actually waiting.
 - **Activity log** -- Transcript viewer for the selected session. Three verbosity modes cycled with `l`: All (full transcript), Summary (truncated output), Tools (hook events only).
 
 **Right pane**:
 
-- **Session detail** -- Deep info for the selected session: full session ID, status, project, directory, terminal, permission mode, model, start time, uptime, current turn duration, context tokens vs model limit, last prompt, and any pending questions with their options.
+- **Session detail** -- Sectioned view for the selected session, organized into: SESSION (ID, directory), STATUS (status, model, mode, terminal), TIMING (uptime, start time, current turn), CONTEXT (token usage vs model limit with color-coded ratio), LAST PROMPT, and PENDING QUESTION (with answer options or plan approval details including allowed prompts).
 
 ### Session table columns
 
-| Column   | Description                                                                                     |
-| -------- | ----------------------------------------------------------------------------------------------- |
-| Status   | Color-coded label with duration (e.g. `RUNNING 3m12s`, `IDLE 45s`, `PERMISSION 1m05s`, `INPUT`) |
-| Session  | First 8 chars of the session ID                                                                 |
-| Project  | Directory basename                                                                              |
-| Terminal | Detected terminal (iTerm2, Ghostty, Terminal, Warp, IntelliJ)                                   |
-| Mode     | Permission mode (default, plan, etc.)                                                           |
-| Context  | Token count color-coded by model limit -- green (<50%), yellow (50-80%), red (>80%)             |
-| Uptime   | Time since session started                                                                      |
+| Column   | Description                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------------- |
+| Status   | Theme-colored label with duration (e.g. `RUNNING 3m12s`, `IDLE 45s`, `PERMISSION 1m05s`, `INPUT`) |
+| Session  | First 8 chars of the session ID                                                                   |
+| Project  | Directory basename                                                                                |
+| Terminal | Detected terminal (iTerm2, Ghostty, Terminal, Warp, IntelliJ)                                     |
+| Mode     | Permission mode (default, plan, acceptEdits, etc.)                                                |
+| Context  | Token count color-coded by model limit -- success (<50%), warning (50-80%), error (>80%)          |
+| Uptime   | Time since session started                                                                        |
 
-Context token limits are model-aware: 1M for Opus, 200K for Sonnet and Haiku.
+Context token limits are model-aware: 1M for Opus, 200K for Sonnet and Haiku. Colors adapt to the selected Textual theme.
 
 ### New session launcher
 
@@ -36,14 +36,15 @@ Pressing `n` opens a directory picker with tab-completion and arrow-key navigati
 
 ### Notification system
 
-Flaude alerts you when a long-running turn finishes. Configure via `S`:
+Flaude alerts you when a long-running turn finishes. Notifications are **off by default**. Configure via `S`:
 
-- **Terminal bell** -- rings the terminal bell (on by default)
-- **macOS notification** -- native notification center alert
+- **Notify on finish** -- master toggle (off by default)
+- **Terminal bell** -- rings the terminal bell (on by default when notifications enabled)
+- **macOS notification** -- native notification center alert showing project name, last prompt, and duration
 - **System sound** -- plays Glass.aiff
 - **Timer threshold** -- minutes before a turn is considered "long" (default: 5, supports decimals like 0.1 for 6 seconds)
 
-Quick toggle with `s` to mute/unmute without opening settings. Notifications fire when a turn that exceeded the timer finishes, not while it's still running.
+Quick toggle with `s` to mute/unmute without opening settings. Notifications fire when a turn that exceeded the timer finishes, not while it's still running. The title bar shows 🔔 when notifications are on and 🔕 when off.
 
 ## Supported terminals
 
@@ -73,6 +74,13 @@ The hook reads the session's transcript JSONL to extract the latest token usage 
 ## Configuration
 
 **`~/.config/flaude/config.yaml`** -- Persists theme, log mode, and notification settings across restarts. Created automatically.
+
+## Uninstalling
+
+```
+flaude uninstall          # Remove hooks from Claude Code
+flaude uninstall --purge  # Also remove config, state dir, env var hints, and pip uninstall
+```
 
 ## Environment variables
 
