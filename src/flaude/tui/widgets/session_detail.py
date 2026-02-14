@@ -62,11 +62,11 @@ class SessionDetail(Static):
         # ── Timing ──
         lines.append("[dim bold]TIMING[/]")
         lines.append(f"  [dim]Up    [/]  {_format_uptime(state.started_at)}")
-        lines.append(f"  [dim]Since [/]  {state.started_at.strftime('%H:%M')}")
+        lines.append(f"  [dim]Start [/]  {state.started_at.strftime('%H:%M')}")
         if state.turn_started_at:
             turn_secs = int((utcnow() - state.turn_started_at).total_seconds())
             mins, secs = divmod(turn_secs, 60)
-            lines.append(f"  [dim]Turn  [/]  {mins}m{secs:02d}s")
+            lines.append(f"  [dim]Since [/]  {mins}m{secs:02d}s")
 
         # ── Context ──
         if state.context_tokens > 0:
