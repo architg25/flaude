@@ -24,7 +24,11 @@ class WaitingItem(ListItem):
         else:
             label = "Input"
 
-        yield Static(f"[bold][{self.session_id[:8]}][/bold] {project} — {label}")
+        tool = self._state.last_tool.name if self._state.last_tool else ""
+        tool_str = f" ({tool})" if tool else ""
+        yield Static(
+            f"[bold][{self.session_id[:8]}][/bold] {project} — {label}{tool_str}"
+        )
 
 
 class PermissionPanel(Vertical):
