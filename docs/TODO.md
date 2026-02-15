@@ -1,5 +1,20 @@
 # TODO
 
+## Improve notification system
+
+The current notification system is basic — terminal bell, macOS notification, and system sound with a single timer threshold. Needs improvement to be more useful for multi-session monitoring.
+
+**Ideas:**
+
+- Per-session notification preferences (some sessions are background tasks, some need immediate attention)
+- Notification on status change (e.g. session goes from RUNNING to IDLE, or enters WAITING_PERMISSION)
+- Notification on error (session hits ERROR status)
+- Notification when context usage exceeds a threshold (e.g. 80% of model limit)
+- Notification grouping — batch multiple session alerts instead of firing one per session
+- Custom sounds per notification type
+- Slack/webhook integration for remote monitoring
+- Notification history — show recent alerts in the TUI so you know what you missed
+
 ## Kill session from dashboard (d key)
 
 Need a reliable way to terminate a Claude Code session from the flaude TUI.
