@@ -23,6 +23,57 @@ _STATUS_STYLES = {
     SessionStatus.ENDED: "$text-muted",
 }
 
+_STATUS_INDICATORS = {
+    SessionStatus.NEW: "◆",
+    SessionStatus.WORKING: "▶",
+    SessionStatus.IDLE: "●",
+    SessionStatus.WAITING_PERMISSION: "⏳",
+    SessionStatus.WAITING_ANSWER: "❓",
+    SessionStatus.ERROR: "✖",
+    SessionStatus.ENDED: "■",
+}
+
+
+def _section_header(title: str, width: int = 30, style: str = "bold") -> str:
+    """Draw: ╶─── TITLE ───────────╴"""
+    padding = width - len(title) - 2
+    left = max(padding // 2, 1)
+    right = max(padding - left, 1)
+    return f"[{style}]╶{'─' * left} {title} {'─' * right}╴[/]"
+
+
+def _kv(label: str, value: str, label_width: int = 7) -> str:
+    """Render: Label   │ value"""
+    return f"  [dim]{label:<{label_width}}[/] [dim]│[/] {value}"
+
+
+def _context_bar(tokens: int, limit: int, width: int = 20) -> str:
+    """Render: ████████░░░░░░░ 269K/1M"""
+    ratio = min(tokens / limit, 1.0) if limit else 0
+    filled = int(ratio * width)
+    empty = width - filled
+
+    if ratio > 0.8:
+        bar_style = "$error"
+    elif ratio > 0.5:
+        bar_style = "$warning"
+    else:
+        bar_style = "$success"
+
+    if tokens >= 1_000_000:
+        ctx_str = f"{tokens / 1_000_000:.1f}M"
+    elif tokens >= 1_000:
+        ctx_str = f"{tokens // 1_000}K"
+    else:
+        ctx_str = str(tokens)
+    if limit >= 1_000_000:
+        limit_str = f"{limit // 1_000_000}M"
+    else:
+        limit_str = f"{limit // 1_000}K"
+
+    bar = f"[{bar_style}]{'█' * filled}[/][dim]{'░' * empty}[/]"
+    return f"  {bar} [{bar_style}]{ctx_str}[/][dim]/{limit_str}[/]"
+
 
 class SessionDetail(Static):
     """Displays detailed info for the selected session."""
@@ -32,71 +83,54 @@ class SessionDetail(Static):
 
     def update_session(self, state: SessionState | None) -> None:
         if state is None:
-            self.update("[dim italic]Select a session to view details[/]")
+            self.update("[dim italic]  Select a session to view details[/]")
             self.border_title = "Detail"
             return
 
         project = Path(state.cwd).name if state.cwd else "?"
-        self.border_title = f"Detail -- {project}"
+        self.border_title = f" Detail ── {project} "
 
         lines: list[str] = []
 
         # ── Session ──
-        lines.append("[dim bold]SESSION[/]")
-        lines.append(f"  [dim]ID    [/]  {state.session_id}")
-        lines.append(f"  [dim]Dir   [/]  {state.cwd}")
-
-        lines.append("")
+        lines.append(_section_header("SESSION"))
+        lines.append(_kv("ID", state.session_id))
+        lines.append(_kv("Dir", state.cwd))
 
         # ── Status ──
-        style = _STATUS_STYLES.get(state.status, "dim")
-        lines.append("[dim bold]STATUS[/]")
-        lines.append(f"  [dim]Status[/]  [{style}]{state.status.value.upper()}[/]")
-        if state.model:
-            lines.append(f"  [dim]Model [/]  {state.model}")
-        lines.append(f"  [dim]Mode  [/]  {state.permission_mode}")
-        lines.append(f"  [dim]Term  [/]  {state.terminal or '?'}")
-
         lines.append("")
+        lines.append(_section_header("STATUS"))
+        style = _STATUS_STYLES.get(state.status, "dim")
+        indicator = _STATUS_INDICATORS.get(state.status, "●")
+        lines.append(
+            _kv("Status", f"[{style}]{indicator} {state.status.value.upper()}[/]")
+        )
+        if state.model:
+            lines.append(_kv("Model", state.model))
+        lines.append(_kv("Mode", state.permission_mode))
+        lines.append(_kv("Term", state.terminal or "?"))
 
         # ── Timing ──
-        lines.append("[dim bold]TIMING[/]")
-        lines.append(f"  [dim]Up    [/]  {_format_uptime(state.started_at)}")
-        lines.append(f"  [dim]Start [/]  {state.started_at.strftime('%H:%M')}")
+        lines.append("")
+        lines.append(_section_header("TIMING"))
+        lines.append(_kv("Up", _format_uptime(state.started_at)))
+        lines.append(_kv("Start", state.started_at.strftime("%H:%M")))
         if state.turn_started_at:
             turn_secs = int((utcnow() - state.turn_started_at).total_seconds())
             mins, secs = divmod(turn_secs, 60)
-            lines.append(f"  [dim]Since [/]  {mins}m{secs:02d}s")
+            lines.append(_kv("Since", f"{mins}m{secs:02d}s"))
 
         # ── Context ──
         if state.context_tokens > 0:
             lines.append("")
-            ctx = state.context_tokens
-            if ctx >= 1_000_000:
-                ctx_str = f"{ctx / 1_000_000:.1f}M"
-            elif ctx >= 1_000:
-                ctx_str = f"{ctx // 1_000}K"
-            else:
-                ctx_str = str(ctx)
+            lines.append(_section_header("CONTEXT"))
             limit = _MODEL_LIMITS.get(state.model or "", 200_000)
-            if limit >= 1_000_000:
-                limit_str = f"{limit // 1_000_000}M"
-            else:
-                limit_str = f"{limit // 1_000}K"
-            ratio = state.context_tokens / limit if limit else 0
-            if ratio > 0.8:
-                bar_style = "$error bold"
-            elif ratio > 0.5:
-                bar_style = "$warning"
-            else:
-                bar_style = "$success"
-            lines.append("[dim bold]CONTEXT[/]")
-            lines.append(f"  [{bar_style}]{ctx_str}[/] / {limit_str}")
+            lines.append(_context_bar(state.context_tokens, limit))
 
         # ── Last Prompt ──
         if state.last_prompt:
             lines.append("")
-            lines.append("[dim bold]LAST PROMPT[/]")
+            lines.append(_section_header("LAST PROMPT"))
             lines.append(f"  [italic]{state.last_prompt}[/]")
 
         # ── Pending Question ──
@@ -104,20 +138,20 @@ class SessionDetail(Static):
         if pq:
             lines.append("")
             if "questions" in pq:
-                lines.append("[$warning bold]PENDING QUESTION[/]")
+                lines.append(_section_header("PENDING QUESTION", style="$warning bold"))
                 for q in pq["questions"]:
                     lines.append(f"  [italic]{q.get('question', '')}[/]")
                     for opt in q.get("options", []):
                         label = opt.get("label", "")
                         desc = opt.get("description", "")
                         if desc:
-                            lines.append(f"    [dim]-[/] [bold]{label}[/]: {desc}")
+                            lines.append(f"    [dim]├─[/] [bold]{label}[/]: {desc}")
                         else:
-                            lines.append(f"    [dim]-[/] [bold]{label}[/]")
+                            lines.append(f"    [dim]├─[/] [bold]{label}[/]")
             else:
-                lines.append("[$warning bold]PLAN APPROVAL NEEDED[/]")
+                lines.append(_section_header("PLAN APPROVAL", style="$warning bold"))
                 for p in pq.get("allowedPrompts", []):
-                    lines.append(f"  [dim]-[/] {p.get('prompt', '')}")
+                    lines.append(f"  [dim]├─[/] {p.get('prompt', '')}")
 
         self.update("\n".join(lines))
 

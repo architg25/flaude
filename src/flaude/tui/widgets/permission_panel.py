@@ -20,14 +20,14 @@ class WaitingItem(ListItem):
     def compose(self) -> ComposeResult:
         project = Path(self._state.cwd).name if self._state.cwd else "?"
         if self._state.status == SessionStatus.WAITING_PERMISSION:
-            label = "Permission"
+            label = "⏳ Permission"
         else:
-            label = "Input"
+            label = "❓ Input"
 
         tool = self._state.last_tool.name if self._state.last_tool else ""
         tool_str = f" ({tool})" if tool else ""
         yield Static(
-            f"[bold][{self.session_id[:8]}][/bold] {project} — {label}{tool_str}"
+            f" [bold][{self.session_id[:8]}][/bold] {project} [dim]─[/] {label}{tool_str}"
         )
 
 
@@ -65,7 +65,7 @@ class PermissionPanel(Vertical):
 
         no_perms.display = False
         perm_list.display = True
-        self.border_title = f"Waiting ({len(waiting)})"
+        self.border_title = f"⏳ Waiting ({len(waiting)})"
         self.add_class("has-waiting")
 
         perm_list.clear()

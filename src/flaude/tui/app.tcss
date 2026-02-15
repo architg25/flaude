@@ -16,27 +16,31 @@ Screen {
 #session-table {
     height: 2fr;
     margin: 0 1;
-    border: round $primary;
+    border: double $primary;
     border-title-color: $text;
     border-title-style: bold;
+    border-title-background: $primary 20%;
+    border-subtitle-color: $text-muted;
+    border-subtitle-style: italic;
     padding: 0 1;
 }
 
-
-/* ── Permission/Waiting Panel (dormant) ── */
+/* ── Permission/Waiting Panel (secondary) ── */
 #permission-panel {
     height: 1fr;
     min-height: 5;
     margin: 0 1;
-    border: round $surface-lighten-1;
+    border: heavy $surface-lighten-2;
     border-title-color: $text-muted;
+    border-title-style: bold;
 }
 
-/* When sessions are actually waiting, escalate visually */
+/* When sessions are actually waiting, promote to primary-style */
 #permission-panel.has-waiting {
-    border: round $warning;
+    border: double $warning;
     border-title-color: $warning;
     border-title-style: bold;
+    border-title-background: $warning 15%;
 }
 
 PermissionPanel .urgent {
@@ -53,8 +57,9 @@ PermissionPanel .urgent {
 #activity-log {
     height: 1fr;
     margin: 0 1;
-    border: round $surface-lighten-1;
+    border: heavy $surface-lighten-2;
     border-title-color: $text-muted;
+    border-title-style: bold;
     padding: 0 1;
 }
 
@@ -64,8 +69,9 @@ PermissionPanel .urgent {
     min-width: 35;
     margin: 0 1 0 0;
     padding: 1 2;
-    border: round $primary;
+    border: double $primary;
     border-title-color: $text;
     border-title-style: bold;
+    border-title-background: $primary 20%;
     overflow-y: auto;
 }

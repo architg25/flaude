@@ -27,6 +27,16 @@ STATUS_THEME = {
     SessionStatus.ENDED: ("ENDED", "text-muted", False),
 }
 
+_STATUS_INDICATORS = {
+    SessionStatus.NEW: "◆",
+    SessionStatus.WORKING: "▶",
+    SessionStatus.IDLE: "●",
+    SessionStatus.WAITING_PERMISSION: "⏳",
+    SessionStatus.WAITING_ANSWER: "❓",
+    SessionStatus.ERROR: "✖",
+    SessionStatus.ENDED: "■",
+}
+
 
 class SessionTable(DataTable):
     """Table showing all active sessions."""
@@ -87,7 +97,8 @@ class SessionTable(DataTable):
                 duration = _format_compact(now, state.turn_started_at)
             else:
                 duration = _format_compact(now, state.last_event_at)
-            status_text = Text(f"{label} {duration}", style=style)
+            indicator = _STATUS_INDICATORS.get(state.status, "●")
+            status_text = Text(f"{indicator} {label} {duration}", style=style)
             project = Path(state.cwd).name if state.cwd else "?"
             uptime = _format_uptime(now, state.started_at)
             term = state.terminal or "?"
@@ -106,6 +117,8 @@ class SessionTable(DataTable):
             )
             if state.session_id == selected_key:
                 restore_row = idx
+
+        self.border_subtitle = f" {len(sorted_sessions)} active "
 
         # Restore cursor to previously selected row
         if self.row_count > 0:
@@ -132,7 +145,7 @@ def _format_compact(now: datetime, since: datetime) -> str:
 
 def _format_context(tokens: int, model: str | None, css: dict) -> Text:
     if tokens <= 0:
-        return Text("-", style=css.get("text-muted", "dim"))
+        return Text("─", style=css.get("text-muted", "dim"))
     if tokens >= 1_000_000:
         label = f"{tokens / 1_000_000:.1f}M"
     elif tokens >= 1_000:

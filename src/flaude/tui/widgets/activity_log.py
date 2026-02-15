@@ -28,7 +28,7 @@ class ActivityLog(RichLog):
         return self._mode
 
     def on_mount(self) -> None:
-        self.border_title = f"Activity ({MODE_LABELS[self._mode]})"
+        self.border_title = f"Activity ── {MODE_LABELS[self._mode]}"
 
     def set_session_filter(self, session_id: str | None) -> None:
         prefix = session_id[:8] if session_id else None
@@ -51,7 +51,7 @@ class ActivityLog(RichLog):
     def cycle_mode(self) -> None:
         idx = MODES.index(self._mode)
         self._mode = MODES[(idx + 1) % len(MODES)]
-        self.border_title = f"Activity ({MODE_LABELS[self._mode]})"
+        self.border_title = f"Activity ── {MODE_LABELS[self._mode]}"
         # Reload from scratch with new mode
         self.clear()
         self._tools_last_size = 0
@@ -79,7 +79,7 @@ class ActivityLog(RichLog):
             for line in new_content.strip().splitlines():
                 if self._session_filter and f"[{self._session_filter}]" not in line:
                     continue
-                self.write(line)
+                self.write(f"[dim]│[/] {line}")
         except OSError:
             pass
 
@@ -136,16 +136,16 @@ class ActivityLog(RichLog):
                 role = message.get("role", entry_type)
                 if role == "assistant":
                     truncated = text[:max_len] + ("..." if len(text) > max_len else "")
-                    return f"[bold]Claude:[/] {truncated}"
+                    return f"◀ [bold]Claude:[/] {truncated}"
                 elif role == "user":
                     truncated = text[:max_len] + ("..." if len(text) > max_len else "")
-                    return f"[dim]> {truncated}[/]"
+                    return f"[dim]▸ {truncated}[/]"
 
             elif item_type == "tool_use":
                 name = item.get("name", "?")
                 tool_input = item.get("input", {})
                 summary = _summarize_tool_input(name, tool_input)
-                return f"[cyan bold]tool[/] [dim]{name}[/] {summary}"
+                return f"⚙ [cyan bold]{name}[/] [dim]{summary}[/]"
 
             elif item_type == "tool_result":
                 continue
