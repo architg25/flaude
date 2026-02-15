@@ -48,3 +48,16 @@ Approve or deny permission prompts directly from the Flaude dashboard, while sti
 - Hook writes a "pending" file and blocks with a short poll loop; dashboard writes an "approved/denied" file; hook reads it and responds. Risk: if user approves in terminal first, the hook's response is ignored but the poll loop still runs until timeout.
 - Wait for Claude Code to support an async permission API or a way to programmatically respond to prompts from outside the session.
 - Use the hook's timeout as a natural fallback — if no dashboard response within N seconds, allow the user's terminal response to take over. Requires careful coordination to avoid double-responses.
+
+## Git worktree and Claude Code worktree support
+
+Support sessions running in git worktrees and Claude Code's built-in worktree mode (`EnterWorktree`).
+
+**Problem:** Currently Flaude tracks sessions by cwd. When a session uses a git worktree (e.g. `.claude/worktrees/<name>`), the cwd is a different path from the main repo. The Project column shows the worktree directory name instead of the actual project. Terminal navigation via cwd matching may also fail if the worktree path doesn't match expectations.
+
+**What needs to change:**
+
+- Detect when a session's cwd is inside a git worktree (check for `.git` file pointing to main repo's `.git/worktrees/`)
+- Resolve the main repo name for the Project column display
+- Track the worktree relationship so the dashboard can group sessions working on the same repo
+- Handle terminal navigation for worktree paths (cwd matching still works, but the project label should reflect the parent repo)
