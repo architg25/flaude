@@ -244,6 +244,7 @@ def _handle_post_tool_use(event: dict, sm: StateManager) -> None:
     state = _load_or_create(event, sm)
     state.last_event = "PostToolUse"
     state.last_event_at = utcnow()
+    state.pending_question = None
     tokens, model = _get_usage_from_transcript(state.transcript_path)
     state.context_tokens = tokens
     if model:
@@ -255,6 +256,7 @@ def _handle_post_tool_use(event: dict, sm: StateManager) -> None:
 def _handle_stop(event: dict, sm: StateManager) -> None:
     state = _load_or_create(event, sm)
     state.status = SessionStatus.IDLE
+    state.pending_question = None
     if state.turn_started_at:
         state.last_turn_duration = (utcnow() - state.turn_started_at).total_seconds()
     state.turn_started_at = None
