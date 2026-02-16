@@ -21,6 +21,11 @@ class WaitingItem(ListItem):
         project = Path(self._state.cwd).name if self._state.cwd else "?"
         if self._state.status == SessionStatus.WAITING_PERMISSION:
             label = "⏳ Permission"
+        elif (
+            self._state.pending_question
+            and "questions" not in self._state.pending_question
+        ):
+            label = "📋 Plan"
         else:
             label = "❓ Input"
 

@@ -102,9 +102,16 @@ class SessionDetail(Static):
         lines.append(_section_header("STATUS"))
         style = _STATUS_STYLES.get(state.status, "dim")
         indicator = _STATUS_INDICATORS.get(state.status, "●")
-        lines.append(
-            _kv("Status", f"[{style}]{indicator} {state.status.value.upper()}[/]")
-        )
+        status_label = state.status.value.upper()
+        if (
+            state.status == SessionStatus.WAITING_ANSWER
+            and state.pending_question
+            and "questions" not in state.pending_question
+        ):
+            indicator = "📋"
+            status_label = "WAITING_PLAN"
+            style = "$warning bold"
+        lines.append(_kv("Status", f"[{style}]{indicator} {status_label}[/]"))
         if state.model:
             lines.append(_kv("Model", state.model))
         lines.append(_kv("Mode", state.permission_mode))

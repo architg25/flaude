@@ -91,13 +91,23 @@ class SessionTable(DataTable):
             label, theme_var, bold = STATUS_THEME.get(
                 state.status, ("?", "text-muted", False)
             )
+            # Differentiate plan approval from input questions
+            if (
+                state.status == SessionStatus.WAITING_ANSWER
+                and state.pending_question
+                and "questions" not in state.pending_question
+            ):
+                label = "PLAN"
+                theme_var = "warning"
             color = css.get(theme_var, "")
             style = f"{color} bold" if bold else color
             if state.status == SessionStatus.WORKING and state.turn_started_at:
                 duration = _format_compact(now, state.turn_started_at)
             else:
                 duration = _format_compact(now, state.last_event_at)
-            indicator = _STATUS_INDICATORS.get(state.status, "●")
+            indicator = (
+                "📋" if label == "PLAN" else _STATUS_INDICATORS.get(state.status, "●")
+            )
             status_text = Text(f"{indicator} {label} {duration}", style=style)
             project = Path(state.cwd).name if state.cwd else "?"
             uptime = _format_uptime(now, state.started_at)
