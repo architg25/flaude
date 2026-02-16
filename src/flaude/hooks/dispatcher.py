@@ -173,7 +173,7 @@ def _load_or_create(event: dict, sm: StateManager) -> SessionState:
     # Backfill missing fields from event data
     if not state.transcript_path and event.get("transcript_path"):
         state.transcript_path = event["transcript_path"]
-    if not state.cwd and event.get("cwd"):
+    if event.get("cwd"):
         state.cwd = event["cwd"]
     if not state.terminal:
         state.terminal = _detect_terminal_from_env()
