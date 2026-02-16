@@ -15,6 +15,17 @@ The current notification system is basic — terminal bell, macOS notification, 
 - Slack/webhook integration for remote monitoring
 - Notification history — show recent alerts in the TUI so you know what you missed
 
+## Monorepo support
+
+The Project column shows the cwd basename, which for monorepos is the repo root (e.g. `services-pilot`) even when you're working in a sub-directory. Multiple sessions in the same monorepo all show the same project name with no way to distinguish them.
+
+**What needs to change:**
+
+- Detect when cwd is a monorepo root (e.g. contains multiple service directories, or has a workspace config like `pom.xml`, `package.json` with workspaces, `BUILD`)
+- Show the sub-directory path relative to the repo root, e.g. `services-pilot/auth-service` instead of just `services-pilot`
+- Or detect the git root and show `repo/subdir` when the session's cwd is deeper than the repo root
+- Detail panel should show both the repo name and the sub-path for clarity
+
 ## Kill session from dashboard (d key)
 
 Need a reliable way to terminate a Claude Code session from the flaude TUI.
