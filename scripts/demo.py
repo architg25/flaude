@@ -165,6 +165,96 @@ def create_demo():
         path.write_text(json.dumps(state, indent=2))
         print(f"  Created {s['status']:<20} {s['cwd'].rsplit('/', 1)[-1]}")
 
+    # Generate fake activity log entries
+    log_dir = STATE_DIR.parent / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "activity.log"
+
+    FAKE_LOGS = {
+        0: [  # backend-api (WORKING)
+            ("SessionStart", ""),
+            ("UserPrompt", ""),
+            ("PreToolUse", 'Read "auth/middleware.py"'),
+            ("PostToolUse", "Read"),
+            ("PreToolUse", 'Grep "jwt.*token"'),
+            ("PostToolUse", "Grep"),
+            ("PreToolUse", 'Read "auth/jwt.py"'),
+            ("PostToolUse", "Read"),
+            ("PreToolUse", 'Edit "auth/middleware.py"'),
+            ("PostToolUse", "Edit"),
+            ("PreToolUse", 'Read "tests/test_auth.py"'),
+            ("PostToolUse", "Read"),
+            ("PreToolUse", 'Edit "auth/middleware.py"'),
+            ("PostToolUse", "Edit"),
+            ("PreToolUse", 'Bash "python -m pytest tests/test_auth.py"'),
+            ("PostToolUse", "Bash"),
+        ],
+        1: [  # flaude (IDLE)
+            ("SessionStart", ""),
+            ("UserPrompt", ""),
+            ("PreToolUse", 'Read "app.py"'),
+            ("PostToolUse", "Read"),
+            ("PreToolUse", 'Edit "app.py"'),
+            ("PostToolUse", "Edit"),
+            ("PreToolUse", 'Bash "git add . && git commit"'),
+            ("PostToolUse", "Bash"),
+            ("PreToolUse", 'Bash "git push origin master"'),
+            ("PostToolUse", "Bash"),
+            ("Stop", "idle"),
+        ],
+        2: [  # mobile-app (INPUT - AskUserQuestion)
+            ("SessionStart", ""),
+            ("UserPrompt", ""),
+            ("PreToolUse", 'Read ".github/workflows/ci.yml"'),
+            ("PostToolUse", "Read"),
+            ("PreToolUse", 'Grep "runner.*macos"'),
+            ("PostToolUse", "Grep"),
+            ("PreToolUse", 'Read "fastlane/Fastfile"'),
+            ("PostToolUse", "Read"),
+            ("PreToolUse", 'AskUserQuestion "CI provider"'),
+        ],
+        3: [  # infra (PERMISSION)
+            ("SessionStart", ""),
+            ("UserPrompt", ""),
+            ("PreToolUse", 'Read "k8s/migration.yaml"'),
+            ("PostToolUse", "Read"),
+            ("PreToolUse", 'Read "k8s/staging/values.yaml"'),
+            ("PostToolUse", "Read"),
+            ("PreToolUse", 'Edit "k8s/migration.yaml"'),
+            ("PostToolUse", "Edit"),
+            ("PreToolUse", 'Bash "kubectl diff -f migration.yaml"'),
+            ("PostToolUse", "Bash"),
+            ("Notification", "permission"),
+        ],
+        4: [  # data-pipeline (PLAN - ExitPlanMode)
+            ("SessionStart", ""),
+            ("UserPrompt", ""),
+            ("PreToolUse", 'Read "spark/job.py"'),
+            ("PostToolUse", "Read"),
+            ("PreToolUse", 'Grep "shuffle"'),
+            ("PostToolUse", "Grep"),
+            ("PreToolUse", 'Read "spark/config.py"'),
+            ("PostToolUse", "Read"),
+            ("PreToolUse", 'Glob "spark/**/*.py"'),
+            ("PostToolUse", "Glob"),
+            ("PreToolUse", 'ExitPlanMode ""'),
+        ],
+    }
+
+    with open(log_file, "a") as f:
+        for idx, s in enumerate(SESSIONS):
+            sid = s["session_id"][:8]
+            entries = FAKE_LOGS.get(idx, [])
+            base_time = now - timedelta(seconds=s["started_at_offset"])
+            for i, (event, detail) in enumerate(entries):
+                ts = (base_time + timedelta(seconds=i * 15)).strftime(
+                    "%Y-%m-%dT%H:%M:%S"
+                )
+                parts = [ts, f"[{sid}]", event]
+                if detail:
+                    parts.append(detail)
+                f.write(" ".join(parts) + "\n")
+
     print(f"\n{len(SESSIONS)} demo sessions created. Run 'flaude' to see them.")
     print("Keeping sessions alive (Ctrl+C to stop and clean up)...\n")
 
