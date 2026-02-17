@@ -1,5 +1,16 @@
 # TODO
 
+## Customisable session sort order
+
+The session table currently sorts by status priority (waiting > error > new > running > idle > ended), then by start time. Allow users to customise this.
+
+**Ideas:**
+
+- Keybind to cycle sort modes (e.g. by status, by project, by uptime, by context usage)
+- Click column headers to sort (Textual DataTable may support this)
+- Persist sort preference in config.yaml
+- Secondary sort key (e.g. sort by project, then by status within each project)
+
 ## Improve notification system
 
 The current notification system is basic — terminal bell, macOS notification, and system sound with a single timer threshold. Needs improvement to be more useful for multi-session monitoring.
