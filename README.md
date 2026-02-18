@@ -86,4 +86,4 @@ Hook events (stdin JSON)
 - [pyyaml](https://github.com/yaml/pyyaml) >= 6.0
 - [setproctitle](https://github.com/dvarrazzo/py-setproctitle) >= 1.3
 
-For detailed documentation on dashboard layout, terminals, notifications, configuration, and environment variables, see [docs/reference.md](docs/reference.md).
+For detailed documentation on dashboard layout, terminals, notifications, configuration, and environment variables, see [docs/reference.md](docs/reference.md). Known bugs are tracked in [docs/BUG.md](docs/BUG.md).
