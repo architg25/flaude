@@ -8,6 +8,10 @@ A portmanteau of "flawed" and "Claude" — because anything that passes through 
 
 A lightweight TUI dashboard for monitoring multiple concurrent Claude Code sessions. Powered by Claude Code's hook system — zero polling of Claude's internals, no process injection, no bloat. Hooks fire on session events, write a JSON file, and exit. The dashboard reads those files on a 1-second timer. That's it.
 
+<p align="center">
+  <img src="docs/img/demo.gif" alt="Flaude demo">
+</p>
+
 ### Features
 
 - **Live session dashboard** -- theme-aware status colors, context usage, uptime, and model info for all running sessions
