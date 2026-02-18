@@ -65,7 +65,7 @@ PermissionPanel .urgent {
 
 /* ── Detail Panel (primary) ── */
 #session-detail {
-    width: 1fr;
+    width: 2fr;
     min-width: 35;
     margin: 0 1 0 0;
     padding: 1 2;
