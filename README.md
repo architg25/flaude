@@ -22,7 +22,7 @@ A lightweight TUI dashboard for monitoring multiple concurrent Claude Code sessi
 - **Session detail panel** -- sectioned view with session info, status, timing, context ratio, last prompt, and pending questions with plan approval details
 - **Monitor-only hooks** -- never blocks Claude Code; users approve permissions in their own terminal as usual
 - **Theme customization** -- all colors adapt to the selected Textual theme, with persistence across restarts
-- **Ghost session cleanup** -- stale sessions auto-removed via process checks and hard timeouts
+- **Ghost session cleanup** -- sessions inactive for 30s get a process check, 30min hard timeout. Removing a session from the dashboard is cosmetic — the actual Claude session is unaffected and reappears on next activity. Configurable via `FLAUDE_STALE_SESSION_TIMEOUT`
 
 ### Install
 
