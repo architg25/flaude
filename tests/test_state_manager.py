@@ -1,36 +1,15 @@
 """Tests for StateManager — save, load, delete."""
 
-from datetime import datetime, timezone
+from flaude.state.models import SessionStatus
 
-import pytest
-
-from flaude.state.manager import StateManager
-from flaude.state.models import SessionState, SessionStatus
-
-
-def _make_state(session_id: str = "sess-1", **overrides) -> SessionState:
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    defaults = dict(
-        session_id=session_id,
-        started_at=now,
-        last_event_at=now,
-    )
-    defaults.update(overrides)
-    return SessionState(**defaults)
-
-
-@pytest.fixture()
-def mgr(tmp_path):
-    sessions_dir = tmp_path / "state"
-    sessions_dir.mkdir()
-    return StateManager(sessions_dir=sessions_dir)
+from helpers import make_state
 
 
 # -- save / load roundtrip --
 
 
 def test_save_and_load_roundtrip(mgr):
-    state = _make_state(cwd="/home/user", error_count=3)
+    state = make_state(cwd="/home/user", error_count=3)
     mgr.save_session(state)
 
     loaded = mgr.load_session("sess-1")
@@ -49,16 +28,16 @@ def test_load_missing_returns_none(mgr):
 
 
 def test_load_all_sessions(mgr):
-    mgr.save_session(_make_state("a"))
-    mgr.save_session(_make_state("b"))
-    mgr.save_session(_make_state("c"))
+    mgr.save_session(make_state("a"))
+    mgr.save_session(make_state("b"))
+    mgr.save_session(make_state("c"))
 
     all_sessions = mgr.load_all_sessions()
     assert set(all_sessions.keys()) == {"a", "b", "c"}
 
 
 def test_load_all_sessions_skips_corrupt(mgr):
-    mgr.save_session(_make_state("good"))
+    mgr.save_session(make_state("good"))
     # Write garbage to a .json file
     (mgr.sessions_dir / "bad.json").write_text("{not valid", encoding="utf-8")
 
@@ -74,7 +53,7 @@ def test_load_all_sessions_empty_dir(mgr):
 
 
 def test_delete_session(mgr):
-    mgr.save_session(_make_state("doomed"))
+    mgr.save_session(make_state("doomed"))
     assert mgr.load_session("doomed") is not None
 
     mgr.delete_session("doomed")
@@ -90,7 +69,7 @@ def test_delete_nonexistent_is_noop(mgr):
 
 def test_atomic_write_no_leftover_tmp(mgr):
     """After save, there should be no .tmp files lying around."""
-    mgr.save_session(_make_state("atomic"))
+    mgr.save_session(make_state("atomic"))
     tmp_files = list(mgr.sessions_dir.glob("*.tmp"))
     assert tmp_files == []
 
@@ -99,7 +78,7 @@ def test_atomic_write_produces_valid_json(mgr):
     """The file on disk must be parseable — no partial writes."""
     import json
 
-    state = _make_state("valid", tool_stats={"Bash": 5, "Read": 12})
+    state = make_state("valid", tool_stats={"Bash": 5, "Read": 12})
     mgr.save_session(state)
 
     raw = (mgr.sessions_dir / "valid.json").read_text(encoding="utf-8")

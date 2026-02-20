@@ -20,6 +20,10 @@ flaude = "flaude.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/flaude"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+
 [project.optional-dependencies]
 dev = [
     "pytest",
