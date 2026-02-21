@@ -2,8 +2,6 @@
 
 from datetime import datetime, timedelta
 
-import pytest
-
 from flaude.cli import (
     _build_hook_entry,
     _format_context,

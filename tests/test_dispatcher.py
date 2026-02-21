@@ -20,6 +20,7 @@ from flaude.hooks.dispatcher import (
     _handle_subagent_stop,
     _handle_user_prompt_submit,
     _load_or_create,
+    _log,
     _summarize_tool,
     _trunc,
 )
@@ -96,6 +97,22 @@ class TestSummarizeTool:
     def test_unknown_tool_returns_name(self):
         assert _summarize_tool("SomeFancyTool", {"whatever": 1}) == "SomeFancyTool"
 
+    @pytest.mark.parametrize(
+        "tool,expected",
+        [
+            ("Bash", ""),
+            ("Read", ""),
+            ("Grep", ""),
+            ("Glob", ""),
+            ("Task", ""),
+            ("WebFetch", ""),
+        ],
+    )
+    def test_missing_keys_return_empty(self, tool, expected):
+        """Summarizers handle empty dicts gracefully."""
+        result = _summarize_tool(tool, {})
+        assert result == expected
+
 
 # ---------------------------------------------------------------------------
 # _detect_terminal_from_env
@@ -105,22 +122,18 @@ class TestSummarizeTool:
 class TestDetectTerminal:
     def test_iterm(self, monkeypatch):
         monkeypatch.setenv("TERM_PROGRAM", "iTerm.app")
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
         assert _detect_terminal_from_env() == "iTerm2"
 
     def test_ghostty(self, monkeypatch):
         monkeypatch.setenv("TERM_PROGRAM", "ghostty")
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
         assert _detect_terminal_from_env() == "Ghostty"
 
     def test_apple_terminal(self, monkeypatch):
         monkeypatch.setenv("TERM_PROGRAM", "Apple_Terminal")
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
         assert _detect_terminal_from_env() == "Terminal"
 
     def test_warp(self, monkeypatch):
         monkeypatch.setenv("TERM_PROGRAM", "WarpTerminal")
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
         assert _detect_terminal_from_env() == "Warp"
 
     def test_jetbrains(self, monkeypatch):
@@ -130,12 +143,10 @@ class TestDetectTerminal:
 
     def test_unknown_returns_none(self, monkeypatch):
         monkeypatch.setenv("TERM_PROGRAM", "unknown-term")
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
         assert _detect_terminal_from_env() is None
 
-    def test_empty_env_returns_none(self, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_empty_env_returns_none(self):
+        # clean_env autouse fixture already cleared these
         assert _detect_terminal_from_env() is None
 
 
@@ -221,6 +232,43 @@ class TestGetUsageFromTranscript:
 
 
 # ---------------------------------------------------------------------------
+# _log
+# ---------------------------------------------------------------------------
+
+
+class TestLog:
+    def test_writes_correct_format(self, tmp_path, monkeypatch):
+        log_file = tmp_path / "activity.log"
+        monkeypatch.setattr("flaude.hooks.dispatcher.ACTIVITY_LOG", log_file)
+        _log("abcdef12-3456-7890", "PreToolUse", 'Read "foo.py"')
+        content = log_file.read_text()
+        assert "[abcdef12]" in content
+        assert "PreToolUse" in content
+        assert 'Read "foo.py"' in content
+
+    def test_truncates_session_id(self, tmp_path, monkeypatch):
+        log_file = tmp_path / "activity.log"
+        monkeypatch.setattr("flaude.hooks.dispatcher.ACTIVITY_LOG", log_file)
+        _log("abcdef1234567890", "Stop")
+        content = log_file.read_text()
+        assert "[abcdef12]" in content
+
+    def test_empty_session_id(self, tmp_path, monkeypatch):
+        log_file = tmp_path / "activity.log"
+        monkeypatch.setattr("flaude.hooks.dispatcher.ACTIVITY_LOG", log_file)
+        _log("", "ERROR", "something broke")
+        content = log_file.read_text()
+        assert "[????????]" in content
+
+    def test_never_raises(self, monkeypatch):
+        """_log must swallow all exceptions."""
+        monkeypatch.setattr(
+            "flaude.hooks.dispatcher.ACTIVITY_LOG", "/nonexistent/path/log"
+        )
+        _log("test", "Error", "this should not raise")  # no exception
+
+
+# ---------------------------------------------------------------------------
 # Event handlers (integration with real StateManager)
 # ---------------------------------------------------------------------------
 
@@ -230,9 +278,7 @@ def _now():
 
 
 class TestHandleSessionStart:
-    def test_creates_new_session(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_creates_new_session(self, mgr):
         event = {"session_id": "s1", "cwd": "/tmp/proj", "permission_mode": "plan"}
         _handle_session_start(event, mgr)
         state = mgr.load_session("s1")
@@ -243,16 +289,7 @@ class TestHandleSessionStart:
 
 
 class TestHandlePreToolUse:
-    def test_sets_working_and_records_tool(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
-        # Patch RulesEngine.load to return empty engine (no rules to fire)
-        from flaude.rules.engine import RulesEngine
-
-        monkeypatch.setattr(
-            RulesEngine, "load", classmethod(lambda cls: RulesEngine(rules=[]))
-        )
-
+    def test_sets_working_and_records_tool(self, mgr, no_rules):
         event = {
             "session_id": "s2",
             "cwd": "/tmp",
@@ -266,15 +303,7 @@ class TestHandlePreToolUse:
         assert state.last_tool.name == "Read"
         assert state.last_tool.summary == "foo.py"
 
-    def test_ask_user_question_sets_waiting(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
-        from flaude.rules.engine import RulesEngine
-
-        monkeypatch.setattr(
-            RulesEngine, "load", classmethod(lambda cls: RulesEngine(rules=[]))
-        )
-
+    def test_ask_user_question_sets_waiting(self, mgr, no_rules):
         question = {"questions": [{"question": "Which approach?"}]}
         event = {
             "session_id": "s3",
@@ -287,12 +316,37 @@ class TestHandlePreToolUse:
         assert state.status == SessionStatus.WAITING_ANSWER
         assert state.pending_question == question
 
+    def test_exit_plan_mode_sets_waiting(self, mgr, no_rules):
+        plan_input = {"allowedPrompts": [{"tool": "Bash", "prompt": "run tests"}]}
+        event = {
+            "session_id": "s3b",
+            "cwd": "/tmp",
+            "tool_name": "ExitPlanMode",
+            "tool_input": plan_input,
+        }
+        _handle_pre_tool_use(event, mgr)
+        state = mgr.load_session("s3b")
+        assert state.status == SessionStatus.WAITING_ANSWER
+        assert state.pending_question == plan_input
+
+    def test_tool_stats_accumulate(self, mgr, no_rules):
+        """Multiple PreToolUse events for the same tool increment the counter."""
+        for _ in range(3):
+            _handle_pre_tool_use(
+                {
+                    "session_id": "acc",
+                    "cwd": "/tmp",
+                    "tool_name": "Bash",
+                    "tool_input": {"command": "ls"},
+                },
+                mgr,
+            )
+        state = mgr.load_session("acc")
+        assert state.tool_stats["Bash"] == 3
+
 
 class TestHandlePostToolUse:
-    def test_clears_pending_question(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
-        # Pre-populate with a pending question
+    def test_clears_pending_question(self, mgr):
         state = make_state(
             "s4", pending_question={"q": "?"}, status=SessionStatus.WAITING_ANSWER
         )
@@ -305,9 +359,7 @@ class TestHandlePostToolUse:
 
 
 class TestHandleStop:
-    def test_sets_idle_and_clears_question(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_sets_idle_and_clears_question(self, mgr):
         state = make_state(
             "s5", status=SessionStatus.WORKING, pending_question={"q": "?"}
         )
@@ -318,9 +370,7 @@ class TestHandleStop:
         assert state.status == SessionStatus.IDLE
         assert state.pending_question is None
 
-    def test_calculates_turn_duration(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_calculates_turn_duration(self, mgr):
         earlier = _now() - timedelta(seconds=45)
         state = make_state("s6", status=SessionStatus.WORKING, turn_started_at=earlier)
         mgr.save_session(state)
@@ -332,9 +382,7 @@ class TestHandleStop:
 
 
 class TestHandleNotification:
-    def test_permission_notification(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_permission_notification(self, mgr):
         state = make_state("s7")
         mgr.save_session(state)
 
@@ -349,9 +397,7 @@ class TestHandleNotification:
         state = mgr.load_session("s7")
         assert state.status == SessionStatus.WAITING_PERMISSION
 
-    def test_attention_notification(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_attention_notification(self, mgr):
         state = make_state("s8")
         mgr.save_session(state)
 
@@ -368,9 +414,7 @@ class TestHandleNotification:
 
 
 class TestHandleUserPromptSubmit:
-    def test_sets_working_and_stores_prompt(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_sets_working_and_stores_prompt(self, mgr):
         state = make_state("s9", status=SessionStatus.IDLE, pending_question={"q": "?"})
         mgr.save_session(state)
 
@@ -382,11 +426,32 @@ class TestHandleUserPromptSubmit:
         assert state.last_prompt == "Fix the bug"
         assert state.pending_question is None
 
+    def test_truncates_long_prompt(self, mgr):
+        long_prompt = "x" * 300
+        state = make_state("s9b", status=SessionStatus.IDLE)
+        mgr.save_session(state)
+
+        _handle_user_prompt_submit(
+            {"session_id": "s9b", "cwd": "/tmp", "user_prompt": long_prompt}, mgr
+        )
+        state = mgr.load_session("s9b")
+        assert len(state.last_prompt) == 200
+
+    def test_empty_prompt_preserves_existing(self, mgr):
+        state = make_state(
+            "s9c", status=SessionStatus.IDLE, last_prompt="previous prompt"
+        )
+        mgr.save_session(state)
+
+        _handle_user_prompt_submit(
+            {"session_id": "s9c", "cwd": "/tmp", "user_prompt": ""}, mgr
+        )
+        state = mgr.load_session("s9c")
+        assert state.last_prompt == "previous prompt"
+
 
 class TestHandleSubagentStop:
-    def test_decrements_count(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_decrements_count(self, mgr):
         state = make_state("s10", subagent_count=3)
         mgr.save_session(state)
 
@@ -394,9 +459,7 @@ class TestHandleSubagentStop:
         state = mgr.load_session("s10")
         assert state.subagent_count == 2
 
-    def test_does_not_go_below_zero(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_does_not_go_below_zero(self, mgr):
         state = make_state("s11", subagent_count=0)
         mgr.save_session(state)
 
@@ -406,9 +469,7 @@ class TestHandleSubagentStop:
 
 
 class TestHandleSessionEnd:
-    def test_deletes_session(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_deletes_session(self, mgr):
         state = make_state("s12")
         mgr.save_session(state)
         assert mgr.load_session("s12") is not None
@@ -423,9 +484,7 @@ class TestHandleSessionEnd:
 
 
 class TestLoadOrCreate:
-    def test_creates_when_missing(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_creates_when_missing(self, mgr):
         event = {
             "session_id": "new-sess",
             "cwd": "/tmp/proj",
@@ -436,9 +495,7 @@ class TestLoadOrCreate:
         assert state.cwd == "/tmp/proj"
         assert state.transcript_path == "/t.jsonl"
 
-    def test_loads_existing(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_loads_existing(self, mgr):
         existing = make_state("existing", cwd="/old")
         mgr.save_session(existing)
 
@@ -446,9 +503,7 @@ class TestLoadOrCreate:
         state = _load_or_create(event, mgr)
         assert state.cwd == "/new"  # updated from event
 
-    def test_backfills_transcript_path(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_backfills_transcript_path(self, mgr):
         existing = make_state("bf", transcript_path=None)
         mgr.save_session(existing)
 
@@ -456,9 +511,7 @@ class TestLoadOrCreate:
         state = _load_or_create(event, mgr)
         assert state.transcript_path == "/new/path.jsonl"
 
-    def test_updates_permission_mode(self, mgr, monkeypatch):
-        monkeypatch.delenv("TERM_PROGRAM", raising=False)
-        monkeypatch.delenv("TERMINAL_EMULATOR", raising=False)
+    def test_updates_permission_mode(self, mgr):
         existing = make_state("pm", permission_mode="default")
         mgr.save_session(existing)
 
