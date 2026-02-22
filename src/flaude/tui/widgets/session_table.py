@@ -1,5 +1,6 @@
 """Session list widget — DataTable of active Claude Code sessions."""
 
+from datetime import datetime
 from pathlib import Path
 
 from rich.text import Text
@@ -20,98 +21,107 @@ STATUS_THEME = {
     SessionStatus.ENDED: ("ENDED", "text-muted", False),
 }
 
+# Sort priority: waiting first, then working, then idle, then ended
+_SORT_PRIORITY = {
+    SessionStatus.WAITING_PERMISSION: 0,
+    SessionStatus.WAITING_ANSWER: 0,
+    SessionStatus.ERROR: 1,
+    SessionStatus.NEW: 2,
+    SessionStatus.WORKING: 3,
+    SessionStatus.IDLE: 4,
+    SessionStatus.ENDED: 5,
+}
+
+
+def _build_row_data(
+    state: SessionState, now: datetime, css: dict
+) -> tuple[Text, str, str, str, str, Text, str]:
+    """Build the 7 cell values for a session row."""
+    label, theme_var, bold = STATUS_THEME.get(state.status, ("?", "text-muted", False))
+    if state.status == SessionStatus.WAITING_ANSWER and state.is_plan_approval:
+        label = "PLAN"
+        theme_var = "warning"
+    color = css.get(theme_var, "")
+    style = f"{color} bold" if bold else color
+    if state.status == SessionStatus.WORKING and state.turn_started_at:
+        duration = format_compact_duration(now, state.turn_started_at)
+    else:
+        duration = format_compact_duration(now, state.last_event_at)
+    indicator = "📋" if label == "PLAN" else STATUS_INDICATORS.get(state.status, "●")
+    status_text = Text(f"{indicator} {label} {duration}", style=style)
+    project = Path(state.cwd).name if state.cwd else "?"
+    uptime = format_uptime(now, state.started_at)
+    term = state.terminal or "?"
+    mode = state.permission_mode
+    context = _format_context(state.context_tokens, state.model, css)
+    return status_text, state.session_id[:8], project[:20], term, mode, context, uptime
+
 
 class SessionTable(DataTable):
     """Table showing all active sessions."""
 
     def on_mount(self) -> None:
         self.cursor_type = "row"
-        self.add_columns(
+        self._col_keys = self.add_columns(
             "Status", "Session", "Project", "Terminal", "Mode", "Context", "Uptime"
         )
+        self._last_order: list[str] = []
         self.border_title = "Sessions"
 
     def update_sessions(self, sessions: dict[str, SessionState]) -> None:
-        # Preserve selection across refreshes
         selected_key = self.get_selected_session_id()
 
-        self.clear()
-
         if not sessions:
-            self.add_row(
-                Text("No sessions", style="dim"),
-                "",
-                Text(
-                    "press n or start claude (flaude init if hooks not set up)",
-                    style="dim italic",
-                ),
-                "",
-                "",
-                "",
-                "",
-            )
+            if self._last_order:
+                # Transition to empty state
+                self.clear()
+                self._last_order = []
+            if self.row_count == 0:
+                self.add_row(
+                    Text("No sessions", style="dim"),
+                    "",
+                    Text(
+                        "press n or start claude (flaude init if hooks not set up)",
+                        style="dim italic",
+                    ),
+                    "",
+                    "",
+                    "",
+                    "",
+                )
             return
 
-        # Sort: waiting first, then working, then idle, then ended
-        priority = {
-            SessionStatus.WAITING_PERMISSION: 0,
-            SessionStatus.WAITING_ANSWER: 0,
-            SessionStatus.ERROR: 1,
-            SessionStatus.NEW: 2,
-            SessionStatus.WORKING: 3,
-            SessionStatus.IDLE: 4,
-            SessionStatus.ENDED: 5,
-        }
         sorted_sessions = sorted(
             sessions.values(),
-            key=lambda s: (priority.get(s.status, 5), s.started_at),
+            key=lambda s: (_SORT_PRIORITY.get(s.status, 5), s.started_at),
         )
+        new_order = [s.session_id for s in sorted_sessions]
 
         now = utcnow()
         css = self.app.get_css_variables()
-        restore_row = 0
-        for idx, state in enumerate(sorted_sessions):
-            label, theme_var, bold = STATUS_THEME.get(
-                state.status, ("?", "text-muted", False)
-            )
-            # Differentiate plan approval from input questions
-            if state.status == SessionStatus.WAITING_ANSWER and state.is_plan_approval:
-                label = "PLAN"
-                theme_var = "warning"
-            color = css.get(theme_var, "")
-            style = f"{color} bold" if bold else color
-            if state.status == SessionStatus.WORKING and state.turn_started_at:
-                duration = format_compact_duration(now, state.turn_started_at)
-            else:
-                duration = format_compact_duration(now, state.last_event_at)
-            indicator = (
-                "📋" if label == "PLAN" else STATUS_INDICATORS.get(state.status, "●")
-            )
-            status_text = Text(f"{indicator} {label} {duration}", style=style)
-            project = Path(state.cwd).name if state.cwd else "?"
-            uptime = format_uptime(now, state.started_at)
-            term = state.terminal or "?"
-            mode = state.permission_mode
-            context = _format_context(state.context_tokens, state.model, css)
 
-            self.add_row(
-                status_text,
-                state.session_id[:8],
-                project[:20],
-                term,
-                mode,
-                context,
-                uptime,
-                key=state.session_id,
-            )
-            if state.session_id == selected_key:
-                restore_row = idx
+        if new_order == self._last_order:
+            # Fast path: in-place cell updates (no DOM teardown)
+            for state in sorted_sessions:
+                cells = _build_row_data(state, now, css)
+                for col_key, value in zip(self._col_keys, cells):
+                    self.update_cell(state.session_id, col_key, value)
+        else:
+            # Slow path: sessions added/removed/reordered — full rebuild
+            self.clear()
+            for state in sorted_sessions:
+                cells = _build_row_data(state, now, css)
+                self.add_row(*cells, key=state.session_id)
+            self._last_order = new_order
+
+            # Restore cursor to previously selected row
+            if selected_key:
+                for idx, sid in enumerate(new_order):
+                    if sid == selected_key:
+                        self.move_cursor(row=idx)
+                        break
 
         self.border_subtitle = f" {len(sorted_sessions)} active "
-
-        # Restore cursor to previously selected row
-        if self.row_count > 0:
-            self.move_cursor(row=restore_row)
 
     def get_selected_session_id(self) -> str | None:
         """Return the session_id of the currently highlighted row."""
