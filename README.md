@@ -96,4 +96,4 @@ Hook events (stdin JSON)
 - [setproctitle](https://github.com/dvarrazzo/py-setproctitle) >= 1.3
 - **Optional:** [Rust](https://www.rust-lang.org/tools/install) toolchain — if `cargo` is on PATH at install time, the native hook dispatcher is compiled and bundled. Without it, the Python fallback is used transparently.
 
-For detailed documentation on dashboard layout, terminals, notifications, configuration, and environment variables, see [docs/reference.md](docs/reference.md). Known bugs are tracked in [docs/BUG.md](docs/BUG.md). Future plans are in [docs/TODO.md](docs/TODO.md).
+For detailed documentation on dashboard layout, terminals, notifications, configuration, and environment variables, see [docs/dashboard.md](docs/dashboard.md). Performance analysis of the Rust hook dispatcher is in [docs/rust-hook.md](docs/rust-hook.md). Known bugs are tracked in [docs/BUG.md](docs/BUG.md). Future plans are in [docs/TODO.md](docs/TODO.md).

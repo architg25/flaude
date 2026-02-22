@@ -1,6 +1,6 @@
-# Reference
+# Dashboard
 
-Detailed documentation for Flaude. For a quick overview, see the [README](../README.md).
+Detailed documentation for the Flaude TUI dashboard. For a quick overview, see the [README](../README.md).
 
 ## Dashboard layout
 
