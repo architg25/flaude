@@ -86,6 +86,22 @@ Approve or deny permission prompts directly from the Flaude dashboard, while sti
 - Wait for Claude Code to support an async permission API or a way to programmatically respond to prompts from outside the session.
 - Use the hook's timeout as a natural fallback — if no dashboard response within N seconds, allow the user's terminal response to take over. Requires careful coordination to avoid double-responses.
 
+## Agent team visibility
+
+Surface Claude Code agent teams (spawned via `TeamCreate` / `Agent` tool) in the dashboard so you can see what a session's subagents are doing.
+
+**Problem:** When Claude spawns a team of agents, each subagent runs in a separate process but only the parent session fires hook events. Flaude has `subagent_count` (decremented on `SubagentStop`) but no visibility into what each subagent is working on, its status, or its task list.
+
+**Ideas:**
+
+- Show subagent count as a badge/indicator on the session row (e.g. `WORKING [3]`)
+- Expand a session row to show its active subagents as nested sub-rows
+- Track subagent names/types from `SubagentStop` events (event payload may contain agent metadata)
+- Read the team task list files (`~/.claude/tasks/<team-name>/`) to show task progress
+- Read the team config (`~/.claude/teams/<team-name>/config.json`) to discover team members and their roles
+- Detail panel section showing team overview: member names, assigned tasks, completion status
+- Investigate whether `PreToolUse`/`PostToolUse` events fire for subagent tool calls (they may only fire for the parent session)
+
 ## Git worktree and Claude Code worktree support
 
 Support sessions running in git worktrees and Claude Code's built-in worktree mode (`EnterWorktree`).
