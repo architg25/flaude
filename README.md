@@ -8,6 +8,8 @@ A portmanteau of "flawed" and "Claude" — because anything that passes through 
 
 A lightweight TUI dashboard for monitoring multiple concurrent Claude Code sessions. Powered by Claude Code's hook system — zero polling of Claude's internals, no process injection, no bloat. Hooks fire on session events, write a JSON file, and exit. The dashboard reads those files on a 1-second timer. That's it.
 
+The hook dispatcher ships as a native Rust binary for fast invocation (~14ms vs ~250ms for Python). Falls back to Python automatically if Rust isn't available at build time.
+
 <p align="center">
   <img src="docs/img/demo.gif" alt="Flaude demo">
 </p>
@@ -28,12 +30,18 @@ A lightweight TUI dashboard for monitoring multiple concurrent Claude Code sessi
 
 Requires **Python 3.11+** and **macOS** (terminal navigation uses AppleScript).
 
-```
+For faster hooks (~18x), install [Rust](https://www.rust-lang.org/tools/install) first. If `cargo` is available during install, the native hook dispatcher is compiled automatically. Without it, a Python fallback is used — everything works, just slightly slower hook invocations.
+
+```bash
+# Optional: install Rust for the native hook dispatcher
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install flaude (compiles Rust binary if cargo is on PATH)
 pip install git+ssh://git@ghe.spotify.net/architg/flaude.git
 flaude init
 ```
 
-`flaude init` registers hooks in `~/.claude/settings.json` (backs up the file first).
+`flaude init` registers hooks in `~/.claude/settings.json` (backs up the file first) and tells you which dispatcher is being used.
 
 ### Usage
 
@@ -64,10 +72,11 @@ flaude uninstall --purge # Remove config, state, and pip uninstall
 Hook events (stdin JSON)
         │
         ▼
-  hooks/dispatcher.py     ← Claude Code invokes on every event
+  flaude-hook (Rust)      ← Native binary, ~14ms per invocation
+  or dispatcher.py        ← Python fallback if Rust binary unavailable
         │
-        ├─▶ state/manager.py   ← Atomic write to /tmp/flaude/state/<session>.json
-        └─▶ logs/activity.log  ← Append one-line log entry
+        ├─▶ state/<session>.json  ← Atomic write to /tmp/flaude/state/
+        └─▶ logs/activity.log     ← Append one-line log entry
 
   tui/app.py              ← Polls state files every 1s, updates widgets
         │
@@ -85,5 +94,6 @@ Hook events (stdin JSON)
 - [pydantic](https://github.com/pydantic/pydantic) >= 2.0
 - [pyyaml](https://github.com/yaml/pyyaml) >= 6.0
 - [setproctitle](https://github.com/dvarrazzo/py-setproctitle) >= 1.3
+- **Optional:** [Rust](https://www.rust-lang.org/tools/install) toolchain — if `cargo` is on PATH at install time, the native hook dispatcher is compiled and bundled. Without it, the Python fallback is used transparently.
 
 For detailed documentation on dashboard layout, terminals, notifications, configuration, and environment variables, see [docs/reference.md](docs/reference.md). Known bugs are tracked in [docs/BUG.md](docs/BUG.md). Future plans are in [docs/TODO.md](docs/TODO.md).

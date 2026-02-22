@@ -40,8 +40,16 @@ TERMINAL_OVERRIDE = os.environ.get("FLAUDE_TERMINAL")
 # All hooks are non-blocking (monitor only), so a short timeout is fine
 HOOK_TIMEOUT_DEFAULT = 10
 
-# Identifier used to detect flaude hooks in settings.json
-HOOK_COMMAND = "python3 -m flaude.hooks.dispatcher"
+# Identifier used to detect flaude hooks in settings.json.
+# Try native Rust binary first, fall back to Python dispatcher.
+_HOOK_BINARY = Path(__file__).parent / "bin" / "flaude-hook"
+if _HOOK_BINARY.exists() and os.access(_HOOK_BINARY, os.X_OK):
+    HOOK_COMMAND = str(_HOOK_BINARY)
+else:
+    HOOK_COMMAND = "python3 -m flaude.hooks.dispatcher"
+
+# Used to identify any flaude hook (Rust or Python) in settings.json
+HOOK_COMMAND_PYTHON = "python3 -m flaude.hooks.dispatcher"
 
 # Model token limits — single source of truth
 MODEL_LIMITS: dict[str, int] = {

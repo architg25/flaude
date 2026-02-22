@@ -67,6 +67,46 @@ Sessions that stop reporting are cleaned up automatically:
 - **30 seconds inactive** -- checks if a `claude` or `node` process still has the session's cwd (via `lsof`). If not, the session file is deleted.
 - **30 minutes inactive** -- hard timeout, session file deleted regardless of process state.
 
+## Hook dispatcher
+
+Claude Code invokes the hook dispatcher on every event (tool calls, session start/end, prompts, notifications). The dispatcher reads JSON from stdin, updates session state, and exits.
+
+Flaude ships two dispatcher implementations:
+
+- **`flaude-hook` (Rust)** — Native binary compiled from `rust/src/main.rs`. ~1.7MB, starts in ~14ms. Used automatically when available.
+- **`hooks/dispatcher.py` (Python)** — Fallback when the Rust binary isn't present. Starts in ~250ms due to Python interpreter overhead.
+
+Both produce identical output — the same JSON state files and activity log lines. The TUI reads these files and doesn't know or care which dispatcher wrote them.
+
+### How the binary is selected
+
+At import time, `constants.py` checks for `src/flaude/bin/flaude-hook`. If the binary exists and is executable, `HOOK_COMMAND` points to it. Otherwise, it falls back to `python3 -m flaude.hooks.dispatcher`. The `flaude init` command writes whichever command is active into `~/.claude/settings.json`.
+
+### Building the Rust binary
+
+If `cargo` is on PATH when you `pip install flaude`, the hatch build hook (`build_hook.py`) compiles the Rust crate automatically. If cargo isn't available, the build hook silently skips and the Python fallback is used.
+
+To build manually:
+
+```
+cd rust && cargo build --release
+cp target/release/flaude-hook ../src/flaude/bin/
+flaude init   # re-register hooks with the binary
+```
+
+After upgrading flaude, re-run `flaude init` to pick up a new binary version.
+
+### Performance
+
+Measured on Apple Silicon (M-series Mac):
+
+| Dispatcher | Avg invocation time | Relative |
+| ---------- | ------------------- | -------- |
+| Rust       | ~14ms               | 1x       |
+| Python     | ~250ms              | ~18x     |
+
+At high tool-call rates (busy search-and-edit sessions with dozens of tool calls per minute), the Rust binary reduces hook overhead from noticeable to imperceptible.
+
 ## Model and token tracking
 
 The hook reads the session's transcript JSONL to extract the latest token usage (input + cache read + cache creation) and model name. This data populates the Context column and detail panel. Supported models: `claude-opus-4-6` (1M limit), `claude-sonnet-4-6` (200K), `claude-haiku-4-5` (200K).
@@ -91,3 +131,5 @@ flaude uninstall --purge  # Also remove config, state dir, env var hints, and pi
 | `FLAUDE_STALE_SESSION_TIMEOUT` | `1800`                         | Seconds before a silent session is hard-removed |
 | `FLAUDE_TUI_REFRESH_INTERVAL`  | `1.0`                          | Dashboard poll interval in seconds              |
 | `FLAUDE_TERMINAL`              | (auto-detect)                  | Override terminal detection                     |
+
+Both the Rust and Python dispatchers respect `FLAUDE_STATE_DIR`.

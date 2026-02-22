@@ -4,3 +4,7 @@ __pycache__/
 dist/
 build/
 .pytest_cache/
+
+# Rust
+rust/target/
+src/flaude/bin/flaude-hook

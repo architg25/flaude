@@ -11,6 +11,7 @@ from pathlib import Path
 from flaude.constants import (
     CLAUDE_SETTINGS_PATH,
     HOOK_COMMAND,
+    HOOK_COMMAND_PYTHON,
     HOOK_TIMEOUT_DEFAULT,
     RULES_PATH,
     SESSIONS_DIR,
@@ -71,9 +72,10 @@ def _save_settings(settings: dict) -> None:
 
 
 def _is_flaude_hook(entry: dict) -> bool:
-    """Check if a hook entry belongs to flaude."""
+    """Check if a hook entry belongs to flaude (Rust binary or Python fallback)."""
     for hook in entry.get("hooks", []):
-        if HOOK_COMMAND in hook.get("command", ""):
+        cmd = hook.get("command", "")
+        if HOOK_COMMAND_PYTHON in cmd or "flaude-hook" in cmd:
             return True
     return False
 
@@ -104,7 +106,9 @@ def cmd_init(args: argparse.Namespace) -> None:
     hooks = settings.setdefault("hooks", {})
 
     if args.dry_run:
-        print("Dry run — would install hooks for events:")
+        dispatcher = "Rust" if HOOK_COMMAND != HOOK_COMMAND_PYTHON else "Python"
+        print(f"Dry run — would install hooks ({dispatcher} dispatcher):")
+        print(f"  Hook command: {HOOK_COMMAND}")
         for event in HOOK_EVENTS:
             print(f"  {event} (timeout: {HOOK_TIMEOUT_DEFAULT}s)")
         print(f"\nSettings file: {CLAUDE_SETTINGS_PATH}")
@@ -125,9 +129,12 @@ def cmd_init(args: argparse.Namespace) -> None:
     ensure_dirs()
     _copy_default_rules()
 
-    print("flaude hooks installed.")
+    if HOOK_COMMAND != HOOK_COMMAND_PYTHON:
+        print("flaude hooks installed (native Rust dispatcher).")
+    else:
+        print("flaude hooks installed (Python dispatcher).")
+    print(f"  Hook: {HOOK_COMMAND}")
     print(f"  Settings: {CLAUDE_SETTINGS_PATH}")
-    print(f"  Rules: {RULES_PATH}")
     print(f"  State dir: {SESSIONS_DIR.parent}")
     print(f"\nRun 'flaude' to start the dashboard.")
 
@@ -142,10 +149,13 @@ def cmd_uninstall(args: argparse.Namespace) -> None:
     hooks = settings.get("hooks", {})
 
     if args.dry_run:
-        print("Dry run — would remove flaude hooks from:")
+        print("Dry run — would remove flaude hooks (Rust and Python) from:")
         for event in HOOK_EVENTS:
             if event in hooks:
-                print(f"  {event}")
+                for entry in hooks[event]:
+                    if _is_flaude_hook(entry):
+                        cmd = entry.get("hooks", [{}])[0].get("command", "")
+                        print(f"  {event}: {cmd}")
         return
 
     backup = _backup_settings()
@@ -172,6 +182,19 @@ def cmd_uninstall(args: argparse.Namespace) -> None:
         if STATE_DIR.exists():
             shutil.rmtree(STATE_DIR)
             print(f"Removed {STATE_DIR}")
+
+        # Remove Rust binary if present (editable installs leave it behind)
+        from flaude.constants import _HOOK_BINARY
+
+        if _HOOK_BINARY.exists():
+            _HOOK_BINARY.unlink()
+            print(f"Removed {_HOOK_BINARY}")
+
+        # Clean Rust build artifacts if in a source checkout
+        rust_target = Path(__file__).parent.parent.parent / "rust" / "target"
+        if rust_target.exists():
+            shutil.rmtree(rust_target)
+            print(f"Removed {rust_target}")
 
         # Check for env vars the user may have set
         env_vars = [
