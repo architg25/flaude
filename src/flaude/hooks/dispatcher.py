@@ -130,6 +130,11 @@ def _get_usage_from_transcript(transcript_path: str | None) -> tuple[int, str | 
         with open(path, "rb") as f:
             f.seek(max(0, size - 10240))
             tail = f.read().decode("utf-8", errors="ignore")
+        # Discard partial first line when we seeked to mid-file
+        if size > 10240:
+            first_nl = tail.find("\n")
+            if first_nl != -1:
+                tail = tail[first_nl + 1 :]
         # Search backwards for the latest usage
         for line in reversed(tail.strip().splitlines()):
             try:
@@ -236,6 +241,9 @@ def _handle_pre_tool_use(event: dict, sm: StateManager) -> None:
     result = engine.evaluate(tool_name, tool_input, state.cwd)
 
     if result.action == "deny":
+        _log(
+            state.session_id, "DENY", f"{tool_name} blocked by rule: {result.rule_name}"
+        )
         _emit_decision("deny")
 
 

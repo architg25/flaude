@@ -1,20 +1,13 @@
 """Session list widget — DataTable of active Claude Code sessions."""
 
-from datetime import datetime
 from pathlib import Path
 
 from rich.text import Text
 from textual.widgets import DataTable
 
-from flaude.constants import utcnow
-from flaude.state.models import SessionState, SessionStatus
-
-MODEL_LIMITS = {
-    "claude-opus-4-6": 1_000_000,
-    "claude-sonnet-4-6": 200_000,
-    "claude-haiku-4-5": 200_000,
-}
-DEFAULT_LIMIT = 200_000
+from flaude.constants import utcnow, get_model_limit
+from flaude.formatting import format_uptime, format_compact_duration, format_token_count
+from flaude.state.models import SessionState, SessionStatus, STATUS_INDICATORS
 
 # Maps status -> (label, theme_var, bold)
 STATUS_THEME = {
@@ -25,16 +18,6 @@ STATUS_THEME = {
     SessionStatus.WAITING_ANSWER: ("INPUT", "accent", True),
     SessionStatus.ERROR: ("ERROR", "error", True),
     SessionStatus.ENDED: ("ENDED", "text-muted", False),
-}
-
-_STATUS_INDICATORS = {
-    SessionStatus.NEW: "◆",
-    SessionStatus.WORKING: "▶",
-    SessionStatus.IDLE: "●",
-    SessionStatus.WAITING_PERMISSION: "⏳",
-    SessionStatus.WAITING_ANSWER: "❓",
-    SessionStatus.ERROR: "✖",
-    SessionStatus.ENDED: "■",
 }
 
 
@@ -92,25 +75,21 @@ class SessionTable(DataTable):
                 state.status, ("?", "text-muted", False)
             )
             # Differentiate plan approval from input questions
-            if (
-                state.status == SessionStatus.WAITING_ANSWER
-                and state.pending_question
-                and "questions" not in state.pending_question
-            ):
+            if state.status == SessionStatus.WAITING_ANSWER and state.is_plan_approval:
                 label = "PLAN"
                 theme_var = "warning"
             color = css.get(theme_var, "")
             style = f"{color} bold" if bold else color
             if state.status == SessionStatus.WORKING and state.turn_started_at:
-                duration = _format_compact(now, state.turn_started_at)
+                duration = format_compact_duration(now, state.turn_started_at)
             else:
-                duration = _format_compact(now, state.last_event_at)
+                duration = format_compact_duration(now, state.last_event_at)
             indicator = (
-                "📋" if label == "PLAN" else _STATUS_INDICATORS.get(state.status, "●")
+                "📋" if label == "PLAN" else STATUS_INDICATORS.get(state.status, "●")
             )
             status_text = Text(f"{indicator} {label} {duration}", style=style)
             project = Path(state.cwd).name if state.cwd else "?"
-            uptime = _format_uptime(now, state.started_at)
+            uptime = format_uptime(now, state.started_at)
             term = state.terminal or "?"
             mode = state.permission_mode
             context = _format_context(state.context_tokens, state.model, css)
@@ -142,27 +121,11 @@ class SessionTable(DataTable):
         return str(row_key.value) if row_key else None
 
 
-def _format_compact(now: datetime, since: datetime) -> str:
-    secs = int((now - since).total_seconds())
-    if secs < 60:
-        return f"{secs}s"
-    mins = secs // 60
-    if mins < 60:
-        return f"{mins}m{secs % 60:02d}s"
-    hours = mins // 60
-    return f"{hours}h{mins % 60:02d}m"
-
-
 def _format_context(tokens: int, model: str | None, css: dict) -> Text:
     if tokens <= 0:
         return Text("─", style=css.get("text-muted", "dim"))
-    if tokens >= 1_000_000:
-        label = f"{tokens / 1_000_000:.1f}M"
-    elif tokens >= 1_000:
-        label = f"{tokens // 1_000}K"
-    else:
-        label = str(tokens)
-    limit = MODEL_LIMITS.get(model or "", DEFAULT_LIMIT)
+    label = format_token_count(tokens)
+    limit = get_model_limit(model)
     ratio = tokens / limit if limit else 0
     if ratio > 0.8:
         style = f"{css.get('error', 'red')} bold"
@@ -171,15 +134,3 @@ def _format_context(tokens: int, model: str | None, css: dict) -> Text:
     else:
         style = css.get("success", "green")
     return Text(label, style=style)
-
-
-def _format_uptime(now: datetime, started: datetime) -> str:
-    delta = now - started
-    minutes = int(delta.total_seconds() // 60)
-    if minutes < 60:
-        return f"{minutes}m"
-    hours = minutes // 60
-    if hours < 24:
-        return f"{hours}h{minutes % 60}m"
-    days = hours // 24
-    return f"{days}d{hours % 24}h"

@@ -37,39 +37,27 @@ def detect_terminal() -> str | None:
     if TERMINAL_OVERRIDE:
         return TERMINAL_OVERRIDE
 
-    for name, process_name in KNOWN_TERMINALS:
-        try:
-            result = subprocess.run(
-                [
-                    "osascript",
-                    "-e",
-                    f'tell application "System Events" to (name of processes) contains "{process_name}"',
-                ],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
-            if "true" in result.stdout.lower():
-                return name
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            continue
+    try:
+        result = subprocess.run(
+            [
+                "osascript",
+                "-e",
+                'tell application "System Events" to get name of every process',
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        processes = result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
 
-    # Check for JetBrains IDEs
+    for name, process_name in KNOWN_TERMINALS:
+        if process_name in processes:
+            return name
+
     for ide_name in JETBRAINS_IDES:
-        try:
-            result = subprocess.run(
-                [
-                    "osascript",
-                    "-e",
-                    f'tell application "System Events" to (name of processes) contains "{ide_name}"',
-                ],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
-            if "true" in result.stdout.lower():
-                return "IntelliJ"
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            continue
+        if ide_name in processes:
+            return "IntelliJ"
 
     return None

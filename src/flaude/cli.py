@@ -16,8 +16,12 @@ from flaude.constants import (
     SESSIONS_DIR,
     STATE_DIR,
     DASHBOARD_PID,
+    atomic_write,
     ensure_dirs,
+    get_model_limit,
+    utcnow,
 )
+from flaude.formatting import format_token_count, format_uptime
 
 
 # All hooks are non-blocking (monitor only)
@@ -49,18 +53,21 @@ def _build_hook_entry() -> dict:
 
 def _load_settings() -> dict:
     if CLAUDE_SETTINGS_PATH.exists():
-        with open(CLAUDE_SETTINGS_PATH) as f:
-            return json.load(f)
+        try:
+            with open(CLAUDE_SETTINGS_PATH, encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return {}
     return {}
 
 
 def _save_settings(settings: dict) -> None:
-    CLAUDE_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = CLAUDE_SETTINGS_PATH.with_suffix(".json.tmp")
-    with open(tmp, "w") as f:
-        json.dump(settings, f, indent=2)
-        f.write("\n")
-    os.rename(tmp, CLAUDE_SETTINGS_PATH)
+    import io
+
+    buf = io.StringIO()
+    json.dump(settings, buf, indent=2)
+    buf.write("\n")
+    atomic_write(CLAUDE_SETTINGS_PATH, buf.getvalue())
 
 
 def _is_flaude_hook(entry: dict) -> bool:
@@ -158,7 +165,7 @@ def cmd_uninstall(args: argparse.Namespace) -> None:
     print("flaude hooks removed.")
 
     if args.purge:
-        config_dir = Path(os.path.expanduser("~/.config/flaude"))
+        config_dir = Path("~/.config/flaude").expanduser()
         if config_dir.exists():
             shutil.rmtree(config_dir)
             print(f"Removed {config_dir}")
@@ -215,34 +222,12 @@ def cmd_run(args: argparse.Namespace) -> None:
             DASHBOARD_PID.unlink(missing_ok=True)
 
 
-def _format_uptime(started_at: datetime) -> str:
-    delta = datetime.now() - started_at
-    secs = int(delta.total_seconds())
-    if secs < 60:
-        return f"{secs}s"
-    mins = secs // 60
-    if mins < 60:
-        return f"{mins}m{secs % 60}s"
-    hrs = mins // 60
-    return f"{hrs}h{mins % 60}m"
-
-
 def _format_context(tokens: int, model: str | None) -> str:
     if not tokens:
         return "-"
-    model_limits = {"opus": 1_000_000, "sonnet": 200_000, "haiku": 200_000}
-    limit = 200_000
-    if model:
-        for key, val in model_limits.items():
-            if key in model:
-                limit = val
-                break
+    limit = get_model_limit(model)
     pct = int(tokens / limit * 100)
-    if tokens >= 1_000_000:
-        return f"{tokens / 1_000_000:.1f}M ({pct}%)"
-    if tokens >= 1_000:
-        return f"{tokens // 1_000}K ({pct}%)"
-    return f"{tokens} ({pct}%)"
+    return f"{format_token_count(tokens)} ({pct}%)"
 
 
 def cmd_status(args: argparse.Namespace) -> None:
@@ -273,7 +258,7 @@ def cmd_status(args: argparse.Namespace) -> None:
         terminal = state.terminal or "-"
         mode = state.permission_mode or "default"
         context = _format_context(state.context_tokens, state.model)
-        uptime = _format_uptime(state.started_at)
+        uptime = format_uptime(utcnow(), state.started_at)
         print(
             fmt.format(
                 state.status.value[:12],

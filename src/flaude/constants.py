@@ -19,17 +19,17 @@ DASHBOARD_PID = STATE_DIR / "dashboard.pid"
 RULES_PATH = Path(
     os.environ.get(
         "FLAUDE_RULES_PATH",
-        os.path.expanduser("~/.config/flaude/rules.yaml"),
+        "~/.config/flaude/rules.yaml",
     )
-)
+).expanduser()
 
-CLAUDE_SETTINGS_PATH = Path(os.path.expanduser("~/.claude/settings.json"))
+CLAUDE_SETTINGS_PATH = Path("~/.claude/settings.json").expanduser()
 CONFIG_PATH = Path(
     os.environ.get(
         "FLAUDE_CONFIG_PATH",
-        os.path.expanduser("~/.config/flaude/config.yaml"),
+        "~/.config/flaude/config.yaml",
     )
-)
+).expanduser()
 
 DEFAULT_THEME = "tokyo-night"
 
@@ -42,6 +42,42 @@ HOOK_TIMEOUT_DEFAULT = 10
 
 # Identifier used to detect flaude hooks in settings.json
 HOOK_COMMAND = "python3 -m flaude.hooks.dispatcher"
+
+# Model token limits — single source of truth
+MODEL_LIMITS: dict[str, int] = {
+    "claude-opus-4-6": 1_000_000,
+    "claude-sonnet-4-6": 200_000,
+    "claude-haiku-4-5": 200_000,
+}
+DEFAULT_MODEL_LIMIT = 200_000
+
+
+def get_model_limit(model: str | None) -> int:
+    """Get token limit for a model, with fuzzy fallback for partial names.
+
+    Handles exact IDs ("claude-opus-4-6") and versioned variants
+    ("claude-opus-4-20250514") by checking if either string contains
+    the model family name (opus/sonnet/haiku).
+    """
+    if not model:
+        return DEFAULT_MODEL_LIMIT
+    if model in MODEL_LIMITS:
+        return MODEL_LIMITS[model]
+    # Fuzzy: check if the model family name appears in the input
+    for key, val in MODEL_LIMITS.items():
+        # Extract family name (e.g., "opus" from "claude-opus-4-6")
+        parts = key.split("-")
+        if len(parts) >= 2 and parts[1] in model:
+            return val
+    return DEFAULT_MODEL_LIMIT
+
+
+def atomic_write(path: Path, data: str) -> None:
+    """Write data to path atomically via a .tmp rename."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(data, encoding="utf-8")
+    os.rename(tmp, path)
 
 
 def ensure_dirs() -> None:

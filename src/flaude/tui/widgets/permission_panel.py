@@ -21,10 +21,7 @@ class WaitingItem(ListItem):
         project = Path(self._state.cwd).name if self._state.cwd else "?"
         if self._state.status == SessionStatus.WAITING_PERMISSION:
             label = "⏳ Permission"
-        elif (
-            self._state.pending_question
-            and "questions" not in self._state.pending_question
-        ):
+        elif self._state.is_plan_approval:
             label = "📋 Plan"
         else:
             label = "❓ Input"
@@ -62,11 +59,18 @@ class PermissionPanel(Vertical):
         perm_list = self.query_one("#permission-list", ListView)
 
         if not waiting:
-            no_perms.display = True
-            perm_list.display = False
-            self.border_title = "Waiting"
-            self.remove_class("has-waiting")
+            if getattr(self, "_last_waiting_ids", None) is not None:
+                self._last_waiting_ids = None
+                no_perms.display = True
+                perm_list.display = False
+                self.border_title = "Waiting"
+                self.remove_class("has-waiting")
             return
+
+        waiting_ids = frozenset(waiting.keys())
+        if waiting_ids == getattr(self, "_last_waiting_ids", None):
+            return
+        self._last_waiting_ids = waiting_ids
 
         no_perms.display = False
         perm_list.display = True

@@ -61,6 +61,9 @@ class RulesEngine:
         for field, pattern in match_spec.items():
             value = str(tool_input.get(field, ""))
             resolved_pattern = pattern.replace("$CWD", re.escape(cwd))
-            if not re.search(resolved_pattern, value):
+            try:
+                if not re.search(resolved_pattern, value):
+                    return False
+            except re.error:
                 return False
         return True

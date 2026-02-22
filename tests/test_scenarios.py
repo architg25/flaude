@@ -214,9 +214,7 @@ class TestCleanupWithMixedSessions:
         from flaude.constants import utcnow
 
         monkeypatch.setattr("flaude.state.cleanup.STALE_SESSION_TIMEOUT", 1800)
-        monkeypatch.setattr(
-            "flaude.state.cleanup._session_has_process", lambda cwd: False
-        )
+        monkeypatch.setattr("flaude.state.cleanup._get_active_cwds", lambda: set())
 
         now = utcnow()
 

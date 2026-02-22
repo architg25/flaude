@@ -32,9 +32,7 @@ class TestCleanupStaleSessions:
     def test_soft_check_no_process_deletes(self, mgr, monkeypatch):
         """Session >30s inactive with no process is cleaned up."""
         monkeypatch.setattr("flaude.state.cleanup.STALE_SESSION_TIMEOUT", 1800)
-        monkeypatch.setattr(
-            "flaude.state.cleanup._session_has_process", lambda cwd: False
-        )
+        monkeypatch.setattr("flaude.state.cleanup._get_active_cwds", lambda: set())
         _stale_state("orphan", mgr, age_seconds=60, cwd="/tmp/dead")
 
         cleaned = cleanup_stale_sessions(mgr)
@@ -45,7 +43,7 @@ class TestCleanupStaleSessions:
         """Session >30s inactive but with a live process is kept."""
         monkeypatch.setattr("flaude.state.cleanup.STALE_SESSION_TIMEOUT", 1800)
         monkeypatch.setattr(
-            "flaude.state.cleanup._session_has_process", lambda cwd: True
+            "flaude.state.cleanup._get_active_cwds", lambda: {"/tmp/alive"}
         )
         _stale_state("alive", mgr, age_seconds=60, cwd="/tmp/alive")
 

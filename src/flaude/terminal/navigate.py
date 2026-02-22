@@ -6,6 +6,11 @@ from pathlib import Path
 from flaude.terminal.detect import JETBRAINS_IDES
 
 
+def _escape_applescript(s: str) -> str:
+    """Escape a string for safe interpolation into AppleScript string literals."""
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def navigate_to_session(terminal: str | None, cwd: str) -> bool:
     """Switch to the terminal tab whose working directory matches cwd.
 
@@ -144,7 +149,7 @@ def _cwds_match(resolved: str, target: str) -> bool:
 
 
 def _build_script(terminal: str, cwd: str) -> str | None:
-    basename = Path(cwd).name
+    basename = _escape_applescript(Path(cwd).name)
 
     if terminal == "Ghostty":
         return f"""

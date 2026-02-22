@@ -8,7 +8,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, DataTable
 
-from flaude.constants import CONFIG_PATH, DEFAULT_THEME, utcnow
+from flaude.constants import CONFIG_PATH, DEFAULT_THEME, TUI_REFRESH_INTERVAL, utcnow
 from flaude.state.manager import StateManager
 from flaude.state.models import SessionStatus
 from flaude.state.cleanup import cleanup_stale_sessions
@@ -27,7 +27,7 @@ from flaude.tui.widgets.activity_log import ActivityLog
 def _load_config() -> dict:
     if CONFIG_PATH.exists():
         try:
-            with open(CONFIG_PATH) as f:
+            with open(CONFIG_PATH, encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
         except Exception:
             return {}
@@ -35,11 +35,14 @@ def _load_config() -> dict:
 
 
 def _save_config(config: dict) -> None:
-    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = CONFIG_PATH.with_suffix(".yaml.tmp")
-    with open(tmp, "w") as f:
-        yaml.dump(config, f, default_flow_style=False)
-    os.rename(tmp, CONFIG_PATH)
+    try:
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = CONFIG_PATH.with_suffix(".yaml.tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            yaml.dump(config, f, default_flow_style=False)
+        os.rename(tmp, CONFIG_PATH)
+    except Exception:
+        pass  # config save is best-effort
 
 
 class FlaudeApp(App):
@@ -83,17 +86,14 @@ class FlaudeApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.set_interval(1.0, self._refresh_state)
+        self.set_interval(TUI_REFRESH_INTERVAL, self._refresh_state)
         self.set_interval(30.0, self._cleanup)
         self._refresh_state()
 
     def watch_theme(self, theme: str) -> None:
         """Save theme selection whenever it changes."""
         self._config["theme"] = theme
-        try:
-            _save_config(self._config)
-        except Exception:
-            pass
+        _save_config(self._config)
 
     def _refresh_state(self) -> None:
         sessions = self._mgr.load_all_sessions()
@@ -152,6 +152,9 @@ class FlaudeApp(App):
                 if state.turn_started_at is not None:
                     self._alerted_turns.discard(sid)
 
+        # Prune alerted set so ended sessions don't leak memory
+        self._alerted_turns &= set(active.keys())
+
     def _cleanup(self) -> None:
         cleanup_stale_sessions(self._mgr)
 
@@ -209,10 +212,7 @@ class FlaudeApp(App):
         log = self.query_one(ActivityLog)
         log.cycle_mode()
         self._config["log_mode"] = log.mode
-        try:
-            _save_config(self._config)
-        except Exception:
-            pass
+        _save_config(self._config)
         from flaude.tui.widgets.activity_log import MODE_LABELS
 
         self.notify(f"Log: {MODE_LABELS[log.mode]}")
@@ -225,7 +225,9 @@ class FlaudeApp(App):
         notif = self._config.get("notifications", {})
         project = Path(state.cwd).name if state.cwd else state.session_id[:8]
         duration = _format_alert_duration(state.last_turn_duration)
-        prompt_preview = (state.last_prompt or "")[:80].replace('"', '\\"')
+        prompt_preview = (
+            (state.last_prompt or "")[:80].replace("\\", "\\\\").replace('"', '\\"')
+        )
 
         if notif.get("terminal_bell", True):
             self.bell()
@@ -251,10 +253,7 @@ class FlaudeApp(App):
         notif = self._config.setdefault("notifications", {})
         enabled = not notif.get("enabled", False)
         notif["enabled"] = enabled
-        try:
-            _save_config(self._config)
-        except Exception:
-            pass
+        _save_config(self._config)
         if enabled:
             self.notify("Notifications: ON")
         else:
@@ -277,10 +276,7 @@ class FlaudeApp(App):
             if result is None:
                 return
             self._config["notifications"] = result
-            try:
-                _save_config(self._config)
-            except Exception:
-                pass
+            _save_config(self._config)
             self._alerted_turns.clear()
             status = "ON" if result["enabled"] else "OFF"
             self.notify(f"Notifications: {status} ({result['long_turn_minutes']}min)")

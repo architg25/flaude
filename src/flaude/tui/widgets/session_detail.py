@@ -4,14 +4,9 @@ from pathlib import Path
 
 from textual.widgets import Static
 
-from flaude.constants import utcnow
-from flaude.state.models import SessionState, SessionStatus
-
-_MODEL_LIMITS = {
-    "claude-opus-4-6": 1_000_000,
-    "claude-sonnet-4-6": 200_000,
-    "claude-haiku-4-5": 200_000,
-}
+from flaude.constants import utcnow, get_model_limit
+from flaude.formatting import format_uptime, format_token_count
+from flaude.state.models import SessionState, SessionStatus, STATUS_INDICATORS
 
 _STATUS_STYLES = {
     SessionStatus.NEW: "$accent bold",
@@ -21,16 +16,6 @@ _STATUS_STYLES = {
     SessionStatus.WAITING_ANSWER: "$accent bold",
     SessionStatus.ERROR: "$error bold",
     SessionStatus.ENDED: "$text-muted",
-}
-
-_STATUS_INDICATORS = {
-    SessionStatus.NEW: "◆",
-    SessionStatus.WORKING: "▶",
-    SessionStatus.IDLE: "●",
-    SessionStatus.WAITING_PERMISSION: "⏳",
-    SessionStatus.WAITING_ANSWER: "❓",
-    SessionStatus.ERROR: "✖",
-    SessionStatus.ENDED: "■",
 }
 
 
@@ -60,12 +45,7 @@ def _context_bar(tokens: int, limit: int, width: int = 20) -> str:
     else:
         bar_style = "$success"
 
-    if tokens >= 1_000_000:
-        ctx_str = f"{tokens / 1_000_000:.1f}M"
-    elif tokens >= 1_000:
-        ctx_str = f"{tokens // 1_000}K"
-    else:
-        ctx_str = str(tokens)
+    ctx_str = format_token_count(tokens)
     if limit >= 1_000_000:
         limit_str = f"{limit // 1_000_000}M"
     else:
@@ -101,13 +81,9 @@ class SessionDetail(Static):
         lines.append("")
         lines.append(_section_header("STATUS"))
         style = _STATUS_STYLES.get(state.status, "dim")
-        indicator = _STATUS_INDICATORS.get(state.status, "●")
+        indicator = STATUS_INDICATORS.get(state.status, "●")
         status_label = state.status.value.upper()
-        if (
-            state.status == SessionStatus.WAITING_ANSWER
-            and state.pending_question
-            and "questions" not in state.pending_question
-        ):
+        if state.status == SessionStatus.WAITING_ANSWER and state.is_plan_approval:
             indicator = "📋"
             status_label = "WAITING_PLAN"
             style = "$warning bold"
@@ -120,7 +96,7 @@ class SessionDetail(Static):
         # ── Timing ──
         lines.append("")
         lines.append(_section_header("TIMING"))
-        lines.append(_kv("Up", _format_uptime(state.started_at)))
+        lines.append(_kv("Up", format_uptime(utcnow(), state.started_at)))
         lines.append(_kv("Start", state.started_at.strftime("%H:%M")))
         if state.turn_started_at:
             turn_secs = int((utcnow() - state.turn_started_at).total_seconds())
@@ -131,7 +107,7 @@ class SessionDetail(Static):
         if state.context_tokens > 0:
             lines.append("")
             lines.append(_section_header("CONTEXT"))
-            limit = _MODEL_LIMITS.get(state.model or "", 200_000)
+            limit = get_model_limit(state.model)
             lines.append(_context_bar(state.context_tokens, limit))
 
         # ── Last Prompt ──
@@ -160,16 +136,7 @@ class SessionDetail(Static):
                 for p in pq.get("allowedPrompts", []):
                     lines.append(f"  [dim]├─[/] {p.get('prompt', '')}")
 
-        self.update("\n".join(lines))
-
-
-def _format_uptime(started) -> str:
-    delta = utcnow() - started
-    minutes = int(delta.total_seconds() // 60)
-    if minutes < 60:
-        return f"{minutes}m"
-    hours = minutes // 60
-    if hours < 24:
-        return f"{hours}h{minutes % 60}m"
-    days = hours // 24
-    return f"{days}d{hours % 24}h"
+        content = "\n".join(lines)
+        if content != getattr(self, "_last_content", None):
+            self._last_content = content
+            self.update(content)

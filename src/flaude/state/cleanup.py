@@ -11,10 +11,8 @@ from flaude.state.models import SessionStatus
 _PROCESS_CHECK_THRESHOLD = 30
 
 
-def _session_has_process(cwd: str) -> bool:
-    """Check if any claude process is running with the given cwd."""
-    if not cwd:
-        return False
+def _get_active_cwds() -> set[str]:
+    """Get CWDs of all running claude/node processes in one call."""
     try:
         result = subprocess.run(
             ["lsof", "-d", "cwd", "-c", "claude", "-c", "node", "-Fn"],
@@ -22,14 +20,13 @@ def _session_has_process(cwd: str) -> bool:
             text=True,
             timeout=5,
         )
-        cwd_normalized = cwd.rstrip("/")
+        cwds = set()
         for line in result.stdout.strip().splitlines():
-            if line.startswith("n") and line[1:].rstrip("/") == cwd_normalized:
-                return True
-        return False
+            if line.startswith("n"):
+                cwds.add(line[1:].rstrip("/"))
+        return cwds
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        # If we can't check, assume alive to avoid false cleanup
-        return True
+        return set()
 
 
 def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
@@ -40,6 +37,9 @@ def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
     cutoff_stale = now - timedelta(seconds=STALE_SESSION_TIMEOUT)
     cutoff_check = now - timedelta(seconds=_PROCESS_CHECK_THRESHOLD)
     cleaned = 0
+
+    # Lazy-load active CWDs only when needed (at most once per cleanup cycle)
+    active_cwds: set[str] | None = None
 
     for sid, state in sessions.items():
         if state.status == SessionStatus.ENDED:
@@ -53,7 +53,10 @@ def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
 
         # Soft check: session inactive for 30s+ — verify process exists
         if state.last_event_at < cutoff_check:
-            if not _session_has_process(state.cwd):
+            if active_cwds is None:
+                active_cwds = _get_active_cwds()
+            cwd_normalized = (state.cwd or "").rstrip("/")
+            if not cwd_normalized or cwd_normalized not in active_cwds:
                 mgr.delete_session(sid)
                 cleaned += 1
                 continue

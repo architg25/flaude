@@ -5,28 +5,53 @@ from datetime import datetime, timedelta
 from flaude.cli import (
     _build_hook_entry,
     _format_context,
-    _format_uptime,
     _is_flaude_hook,
 )
+from flaude.formatting import format_uptime, format_compact_duration
 
 
 # ---------------------------------------------------------------------------
-# _format_uptime
+# format_uptime (shared)
 # ---------------------------------------------------------------------------
 
 
 class TestFormatUptime:
-    def test_seconds(self):
-        started = datetime.now() - timedelta(seconds=42)
-        assert _format_uptime(started) == "42s"
-
-    def test_minutes_and_seconds(self):
-        started = datetime.now() - timedelta(minutes=3, seconds=15)
-        assert _format_uptime(started) == "3m15s"
+    def test_minutes(self):
+        now = datetime.now()
+        started = now - timedelta(minutes=42, seconds=10)
+        assert format_uptime(now, started) == "42m"
 
     def test_hours_and_minutes(self):
-        started = datetime.now() - timedelta(hours=2, minutes=30, seconds=5)
-        assert _format_uptime(started) == "2h30m"
+        now = datetime.now()
+        started = now - timedelta(hours=2, minutes=30)
+        assert format_uptime(now, started) == "2h30m"
+
+    def test_days_and_hours(self):
+        now = datetime.now()
+        started = now - timedelta(days=1, hours=3)
+        assert format_uptime(now, started) == "1d3h"
+
+
+class TestFormatCompactDuration:
+    def test_seconds(self):
+        now = datetime.now()
+        since = now - timedelta(seconds=42)
+        assert format_compact_duration(now, since) == "42s"
+
+    def test_minutes_and_seconds(self):
+        now = datetime.now()
+        since = now - timedelta(minutes=3, seconds=5)
+        assert format_compact_duration(now, since) == "3m05s"
+
+    def test_hours_and_minutes(self):
+        now = datetime.now()
+        since = now - timedelta(hours=1, minutes=30)
+        assert format_compact_duration(now, since) == "1h30m"
+
+    def test_clamps_negative_to_zero(self):
+        now = datetime.now()
+        future = now + timedelta(seconds=5)
+        assert format_compact_duration(now, future) == "0s"
 
 
 # ---------------------------------------------------------------------------
