@@ -68,6 +68,7 @@ enum SessionStatus {
     Idle,
     WaitingPermission,
     WaitingAnswer,
+    Plan,
     Error,
     Ended,
 }
@@ -569,7 +570,10 @@ fn handle_pre_tool_use(event: &serde_json::Value) {
     state.last_event = "PreToolUse".into();
     state.last_event_at = now;
 
-    if tool_name == "AskUserQuestion" || tool_name == "ExitPlanMode" {
+    if tool_name == "ExitPlanMode" {
+        state.pending_question = Some(tool_input.clone());
+        state.status = SessionStatus::Plan;
+    } else if tool_name == "AskUserQuestion" {
         state.pending_question = Some(tool_input.clone());
         state.status = SessionStatus::WaitingAnswer;
     } else {
@@ -637,7 +641,7 @@ fn handle_notification(event: &serde_json::Value) {
 
     if message.contains("permission") {
         state.status = SessionStatus::WaitingPermission;
-    } else if message.contains("needs your attention") {
+    } else if message.contains("needs your attention") && state.status != SessionStatus::Plan {
         state.status = SessionStatus::WaitingAnswer;
     }
 

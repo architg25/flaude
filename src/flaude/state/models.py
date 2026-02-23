@@ -1,5 +1,6 @@
 """Pydantic models for session state."""
 
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
@@ -12,19 +13,33 @@ class SessionStatus(str, Enum):
     IDLE = "idle"
     WAITING_PERMISSION = "waiting_permission"
     WAITING_ANSWER = "waiting_answer"
+    PLAN = "plan"
     ERROR = "error"
     ENDED = "ended"
 
 
-# Canonical status indicators — used by all UI surfaces
-STATUS_INDICATORS: dict[SessionStatus, str] = {
-    SessionStatus.NEW: "◆",
-    SessionStatus.WORKING: "▶",
-    SessionStatus.IDLE: "●",
-    SessionStatus.WAITING_PERMISSION: "⏳",
-    SessionStatus.WAITING_ANSWER: "❓",
-    SessionStatus.ERROR: "✖",
-    SessionStatus.ENDED: "■",
+@dataclass(frozen=True, slots=True)
+class StatusInfo:
+    """Canonical display properties for a session status."""
+
+    label: str
+    indicator: str
+    theme_var: str
+    bold: bool
+    sort_priority: int
+
+
+STATUS_INFO: dict[SessionStatus, StatusInfo] = {
+    SessionStatus.NEW: StatusInfo("NEW", "◆", "accent", True, 2),
+    SessionStatus.WORKING: StatusInfo("RUNNING", "▶", "success", True, 3),
+    SessionStatus.IDLE: StatusInfo("IDLE", "●", "text-muted", False, 4),
+    SessionStatus.WAITING_PERMISSION: StatusInfo(
+        "PERMISSION", "⏳", "warning", True, 0
+    ),
+    SessionStatus.WAITING_ANSWER: StatusInfo("INPUT", "❓", "accent", True, 0),
+    SessionStatus.PLAN: StatusInfo("PLAN", "📋", "warning", True, 0),
+    SessionStatus.ERROR: StatusInfo("ERROR", "✖", "error", True, 1),
+    SessionStatus.ENDED: StatusInfo("ENDED", "■", "text-muted", False, 5),
 }
 
 
@@ -56,8 +71,3 @@ class SessionState(BaseModel):
     context_tokens: int = 0
     error_count: int = 0
     subagent_count: int = 0
-
-    @property
-    def is_plan_approval(self) -> bool:
-        """True when pending_question is a plan approval, not a user question."""
-        return bool(self.pending_question and "questions" not in self.pending_question)

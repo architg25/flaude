@@ -225,7 +225,10 @@ def _handle_pre_tool_use(event: dict, sm: StateManager) -> None:
     state.last_event = "PreToolUse"
     state.last_event_at = now
 
-    if tool_name in ("AskUserQuestion", "ExitPlanMode"):
+    if tool_name == "ExitPlanMode":
+        state.pending_question = tool_input
+        state.status = SessionStatus.PLAN
+    elif tool_name == "AskUserQuestion":
         state.pending_question = tool_input
         state.status = SessionStatus.WAITING_ANSWER
     else:
@@ -280,7 +283,7 @@ def _handle_notification(event: dict, sm: StateManager) -> None:
 
     if "permission" in message:
         state.status = SessionStatus.WAITING_PERMISSION
-    elif "needs your attention" in message:
+    elif "needs your attention" in message and state.status != SessionStatus.PLAN:
         state.status = SessionStatus.WAITING_ANSWER
 
     state.last_event = "Notification"

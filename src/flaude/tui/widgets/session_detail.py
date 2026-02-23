@@ -6,17 +6,7 @@ from textual.widgets import Static
 
 from flaude.constants import utcnow, get_model_limit
 from flaude.formatting import format_uptime, format_token_count
-from flaude.state.models import SessionState, SessionStatus, STATUS_INDICATORS
-
-_STATUS_STYLES = {
-    SessionStatus.NEW: "$accent bold",
-    SessionStatus.WORKING: "$success bold",
-    SessionStatus.IDLE: "$text-muted",
-    SessionStatus.WAITING_PERMISSION: "$warning bold",
-    SessionStatus.WAITING_ANSWER: "$accent bold",
-    SessionStatus.ERROR: "$error bold",
-    SessionStatus.ENDED: "$text-muted",
-}
+from flaude.state.models import SessionState, STATUS_INFO
 
 
 def _section_header(title: str, width: int = 30, style: str = "bold") -> str:
@@ -80,14 +70,9 @@ class SessionDetail(Static):
         # ── Status ──
         lines.append("")
         lines.append(_section_header("STATUS"))
-        style = _STATUS_STYLES.get(state.status, "dim")
-        indicator = STATUS_INDICATORS.get(state.status, "●")
-        status_label = state.status.value.upper()
-        if state.status == SessionStatus.WAITING_ANSWER and state.is_plan_approval:
-            indicator = "📋"
-            status_label = "WAITING_PLAN"
-            style = "$warning bold"
-        lines.append(_kv("Status", f"[{style}]{indicator} {status_label}[/]"))
+        info = STATUS_INFO[state.status]
+        style = f"${info.theme_var} bold" if info.bold else f"${info.theme_var}"
+        lines.append(_kv("Status", f"[{style}]{info.indicator} {info.label}[/]"))
         if state.model:
             lines.append(_kv("Model", state.model))
         lines.append(_kv("Mode", state.permission_mode))

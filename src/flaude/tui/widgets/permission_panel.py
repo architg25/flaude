@@ -6,7 +6,7 @@ from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Static, ListView, ListItem
 
-from flaude.state.models import SessionState, SessionStatus
+from flaude.state.models import SessionState, SessionStatus, STATUS_INFO
 
 
 class WaitingItem(ListItem):
@@ -19,12 +19,8 @@ class WaitingItem(ListItem):
 
     def compose(self) -> ComposeResult:
         project = Path(self._state.cwd).name if self._state.cwd else "?"
-        if self._state.status == SessionStatus.WAITING_PERMISSION:
-            label = "⏳ Permission"
-        elif self._state.is_plan_approval:
-            label = "📋 Plan"
-        else:
-            label = "❓ Input"
+        info = STATUS_INFO[self._state.status]
+        label = f"{info.indicator} {info.label}"
 
         tool = self._state.last_tool.name if self._state.last_tool else ""
         tool_str = f" ({tool})" if tool else ""
@@ -52,7 +48,11 @@ class PermissionPanel(Vertical):
             sid: s
             for sid, s in sessions.items()
             if s.status
-            in (SessionStatus.WAITING_PERMISSION, SessionStatus.WAITING_ANSWER)
+            in (
+                SessionStatus.WAITING_PERMISSION,
+                SessionStatus.WAITING_ANSWER,
+                SessionStatus.PLAN,
+            )
         }
 
         no_perms = self.query_one("#no-permissions", Static)

@@ -8,47 +8,21 @@ from textual.widgets import DataTable
 
 from flaude.constants import utcnow, get_model_limit
 from flaude.formatting import format_uptime, format_compact_duration, format_token_count
-from flaude.state.models import SessionState, SessionStatus, STATUS_INDICATORS
-
-# Maps status -> (label, theme_var, bold)
-STATUS_THEME = {
-    SessionStatus.NEW: ("NEW", "accent", True),
-    SessionStatus.WORKING: ("RUNNING", "success", True),
-    SessionStatus.IDLE: ("IDLE", "text-muted", False),
-    SessionStatus.WAITING_PERMISSION: ("PERMISSION", "warning", True),
-    SessionStatus.WAITING_ANSWER: ("INPUT", "accent", True),
-    SessionStatus.ERROR: ("ERROR", "error", True),
-    SessionStatus.ENDED: ("ENDED", "text-muted", False),
-}
-
-# Sort priority: waiting first, then working, then idle, then ended
-_SORT_PRIORITY = {
-    SessionStatus.WAITING_PERMISSION: 0,
-    SessionStatus.WAITING_ANSWER: 0,
-    SessionStatus.ERROR: 1,
-    SessionStatus.NEW: 2,
-    SessionStatus.WORKING: 3,
-    SessionStatus.IDLE: 4,
-    SessionStatus.ENDED: 5,
-}
+from flaude.state.models import SessionState, SessionStatus, STATUS_INFO
 
 
 def _build_row_data(
     state: SessionState, now: datetime, css: dict
 ) -> tuple[Text, str, str, str, str, Text, str]:
     """Build the 7 cell values for a session row."""
-    label, theme_var, bold = STATUS_THEME.get(state.status, ("?", "text-muted", False))
-    if state.status == SessionStatus.WAITING_ANSWER and state.is_plan_approval:
-        label = "PLAN"
-        theme_var = "warning"
-    color = css.get(theme_var, "")
-    style = f"{color} bold" if bold else color
+    info = STATUS_INFO[state.status]
+    color = css.get(info.theme_var, "")
+    style = f"{color} bold" if info.bold else color
     if state.status == SessionStatus.WORKING and state.turn_started_at:
         duration = format_compact_duration(now, state.turn_started_at)
     else:
         duration = format_compact_duration(now, state.last_event_at)
-    indicator = "📋" if label == "PLAN" else STATUS_INDICATORS.get(state.status, "●")
-    status_text = Text(f"{indicator} {label} {duration}", style=style)
+    status_text = Text(f"{info.indicator} {info.label} {duration}", style=style)
     project = Path(state.cwd).name if state.cwd else "?"
     uptime = format_uptime(now, state.started_at)
     term = state.terminal or "?"
@@ -93,7 +67,7 @@ class SessionTable(DataTable):
 
         sorted_sessions = sorted(
             sessions.values(),
-            key=lambda s: (_SORT_PRIORITY.get(s.status, 5), s.started_at),
+            key=lambda s: (STATUS_INFO[s.status].sort_priority, s.started_at),
         )
         new_order = [s.session_id for s in sorted_sessions]
 

@@ -126,7 +126,11 @@ class FlaudeApp(App):
             1
             for s in active.values()
             if s.status
-            in (SessionStatus.WAITING_PERMISSION, SessionStatus.WAITING_ANSWER)
+            in (
+                SessionStatus.WAITING_PERMISSION,
+                SessionStatus.WAITING_ANSWER,
+                SessionStatus.PLAN,
+            )
         )
         notif = self._config.get("notifications", {})
         notif_icon = "🔔" if notif.get("enabled", False) else "🔕"
