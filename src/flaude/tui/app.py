@@ -12,6 +12,7 @@ from flaude.constants import CONFIG_PATH, DEFAULT_THEME, TUI_REFRESH_INTERVAL, u
 from flaude.state.manager import StateManager
 from flaude.state.models import SessionStatus
 from flaude.state.cleanup import cleanup_stale_sessions
+from flaude.state.scanner import scan_preexisting_sessions
 from flaude.terminal.detect import detect_terminal
 from flaude.terminal.launch import launch_session
 from flaude.terminal.navigate import navigate_to_session
@@ -86,6 +87,7 @@ class FlaudeApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        scan_preexisting_sessions(self._mgr)
         self.set_interval(TUI_REFRESH_INTERVAL, self._refresh_state)
         self.set_interval(30.0, self._cleanup)
         self._refresh_state()
