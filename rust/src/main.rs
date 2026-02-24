@@ -112,6 +112,8 @@ struct SessionState {
     #[serde(default)]
     terminal: Option<String>,
     #[serde(default)]
+    tty: Option<String>,
+    #[serde(default)]
     turn_started_at: Option<NaiveDateTime>,
     #[serde(default)]
     last_turn_duration: f64,
@@ -237,6 +239,40 @@ fn summarize_tool(tool_name: &str, tool_input: &serde_json::Value) -> String {
 // ---------------------------------------------------------------------------
 // Terminal detection — mirrors dispatcher._detect_terminal_from_env()
 // ---------------------------------------------------------------------------
+
+fn detect_tty() -> Option<String> {
+    // Walk up the process tree from our parent to find a process with a TTY.
+    // The hook's fds are all piped (no controlling terminal), but the parent
+    // process (Claude Code) runs on a real TTY.
+    let mut pid = unsafe { libc::getppid() } as u32;
+    for _ in 0..5 {
+        if pid <= 1 {
+            break;
+        }
+        let output = std::process::Command::new("ps")
+            .args(["-p", &pid.to_string(), "-o", "tty=,ppid="])
+            .output()
+            .ok()?;
+        let text = String::from_utf8_lossy(&output.stdout);
+        let parts: Vec<&str> = text.trim().split_whitespace().collect();
+        if parts.is_empty() {
+            break;
+        }
+        let tty = parts[0];
+        if !tty.is_empty() && tty != "??" {
+            return Some(format!("/dev/{tty}"));
+        }
+        if parts.len() >= 2 {
+            pid = match parts[1].parse() {
+                Ok(p) => p,
+                Err(_) => break,
+            };
+        } else {
+            break;
+        }
+    }
+    None
+}
 
 fn detect_terminal_from_env() -> Option<String> {
     if let Ok(term) = env::var("TERM_PROGRAM") {
@@ -473,6 +509,7 @@ fn load_or_create(event: &serde_json::Value) -> SessionState {
             last_prompt: None,
             pending_question: None,
             terminal: detect_terminal_from_env(),
+            tty: detect_tty(),
             turn_started_at: None,
             last_turn_duration: 0.0,
             model: None,
@@ -491,6 +528,9 @@ fn load_or_create(event: &serde_json::Value) -> SessionState {
     }
     if state.terminal.is_none() {
         state.terminal = detect_terminal_from_env();
+    }
+    if state.tty.is_none() {
+        state.tty = detect_tty();
     }
     if let Some(pm) = get_opt_str(event, "permission_mode") {
         state.permission_mode = pm;
@@ -538,6 +578,7 @@ fn handle_session_start(event: &serde_json::Value) {
         last_prompt: None,
         pending_question: None,
         terminal: detect_terminal_from_env(),
+        tty: detect_tty(),
         turn_started_at: None,
         last_turn_duration: 0.0,
         model: None,
@@ -826,6 +867,7 @@ mod tests {
             last_prompt: None,
             pending_question: None,
             terminal: Some("iTerm2".into()),
+            tty: Some("/dev/ttys006".into()),
             turn_started_at: None,
             last_turn_duration: 0.0,
             model: None,

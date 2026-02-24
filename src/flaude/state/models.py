@@ -65,6 +65,7 @@ class SessionState(BaseModel):
     last_prompt: str | None = None
     pending_question: dict | None = None
     terminal: str | None = None
+    tty: str | None = None
     turn_started_at: datetime | None = None
     last_turn_duration: float = 0
     model: str | None = None

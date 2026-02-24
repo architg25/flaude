@@ -316,7 +316,7 @@ class TestHandlePreToolUse:
         assert state.status == SessionStatus.WAITING_ANSWER
         assert state.pending_question == question
 
-    def test_exit_plan_mode_sets_waiting(self, mgr, no_rules):
+    def test_exit_plan_mode_sets_plan(self, mgr, no_rules):
         plan_input = {"allowedPrompts": [{"tool": "Bash", "prompt": "run tests"}]}
         event = {
             "session_id": "s3b",
@@ -326,7 +326,7 @@ class TestHandlePreToolUse:
         }
         _handle_pre_tool_use(event, mgr)
         state = mgr.load_session("s3b")
-        assert state.status == SessionStatus.WAITING_ANSWER
+        assert state.status == SessionStatus.PLAN
         assert state.pending_question == plan_input
 
     def test_tool_stats_accumulate(self, mgr, no_rules):

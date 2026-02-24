@@ -118,7 +118,7 @@ class TestExitPlanModeFlow:
         plan_input = {"allowedPrompts": [{"tool": "Bash", "prompt": "run tests"}]}
         _handle_pre_tool_use(_ev(tool_name="ExitPlanMode", tool_input=plan_input), mgr)
         state = mgr.load_session(SID)
-        assert state.status == SessionStatus.WAITING_ANSWER
+        assert state.status == SessionStatus.PLAN
         assert state.pending_question == plan_input
 
         _handle_post_tool_use(_ev(tool_name="ExitPlanMode"), mgr)

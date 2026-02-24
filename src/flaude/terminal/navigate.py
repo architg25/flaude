@@ -11,9 +11,10 @@ def _escape_applescript(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def navigate_to_session(terminal: str | None, cwd: str) -> bool:
-    """Switch to the terminal tab whose working directory matches cwd.
+def navigate_to_session(terminal: str | None, cwd: str, tty: str | None = None) -> bool:
+    """Switch to the terminal tab matching this session.
 
+    Uses tty for exact tab matching when available, falls back to cwd.
     Returns True if navigation succeeded, False otherwise.
     """
     if not terminal or not cwd:
@@ -21,7 +22,7 @@ def navigate_to_session(terminal: str | None, cwd: str) -> bool:
 
     try:
         if terminal == "iTerm2":
-            return _navigate_iterm2(cwd)
+            return _navigate_iterm2(cwd, tty=tty)
         script = _build_script(terminal, cwd)
         if not script:
             return False
@@ -36,11 +37,11 @@ def navigate_to_session(terminal: str | None, cwd: str) -> bool:
         return False
 
 
-def _navigate_iterm2(cwd: str) -> bool:
-    """Navigate to an iTerm2 tab by matching tty → cwd.
+def _navigate_iterm2(cwd: str, tty: str | None = None) -> bool:
+    """Navigate to an iTerm2 tab by matching tty device or cwd.
 
     1. AppleScript: collect all session ttys with window/tab indices
-    2. Python: for each tty, resolve cwd via lsof
+    2. Match by tty device (fast, unambiguous) or fall back to cwd matching
     3. AppleScript: select the matching tab
     """
     # Step 1: Get all session ttys with their window/tab indices
@@ -71,39 +72,53 @@ def _navigate_iterm2(cwd: str) -> bool:
     if result.returncode != 0 or not result.stdout.strip():
         return False
 
-    # Step 2: For each tty, resolve the foreground process cwd
-    for line in result.stdout.strip().splitlines():
+    lines = result.stdout.strip().splitlines()
+
+    # Step 2a: Fast path — match by tty device directly (no ps/lsof needed)
+    if tty:
+        for line in lines:
+            parts = line.strip().split("|")
+            if len(parts) != 3:
+                continue
+            tab_tty, win_idx, tab_idx = parts
+            if tab_tty.strip() == tty:
+                return _select_iterm2_tab(win_idx, tab_idx)
+
+    # Step 2b: Slow path — fall back to cwd matching for sessions without tty
+    for line in lines:
         parts = line.strip().split("|")
         if len(parts) != 3:
             continue
-        tty, win_idx, tab_idx = parts[0], parts[1], parts[2]
+        tab_tty, win_idx, tab_idx = parts
 
-        resolved_cwd = _get_cwd_for_tty(tty)
+        resolved_cwd = _get_cwd_for_tty(tab_tty)
         if resolved_cwd and _cwds_match(resolved_cwd, cwd):
-            # Step 3: Select this tab and bring window to front
-            select_script = f"""
-            tell application "iTerm2"
-                set w to window {win_idx}
-                -- Unminimize if needed
-                if miniaturized of w then
-                    set miniaturized of w to false
-                end if
-                set t to tab {tab_idx} of w
-                select t
-                -- Bring window to front
-                set index of w to 1
-                activate
-            end tell
-            """
-            subprocess.run(
-                ["osascript", "-e", select_script],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            return True
+            return _select_iterm2_tab(win_idx, tab_idx)
 
     return False
+
+
+def _select_iterm2_tab(win_idx: str, tab_idx: str) -> bool:
+    """Select an iTerm2 tab by window and tab index."""
+    select_script = f"""
+    tell application "iTerm2"
+        set w to window {win_idx}
+        if miniaturized of w then
+            set miniaturized of w to false
+        end if
+        set t to tab {tab_idx} of w
+        select t
+        set index of w to 1
+        activate
+    end tell
+    """
+    subprocess.run(
+        ["osascript", "-e", select_script],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    return True
 
 
 def _get_cwd_for_tty(tty: str) -> str | None:

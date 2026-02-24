@@ -113,6 +113,7 @@ name = "flaude-hook"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "libc",
  "regex",
  "serde",
  "serde_json",

@@ -180,7 +180,7 @@ class FlaudeApp(App):
 
         terminal = state.terminal or self._fallback_terminal
 
-        if navigate_to_session(terminal, state.cwd):
+        if navigate_to_session(terminal, state.cwd, tty=state.tty):
             self.notify(f"Switched to {session_id[:8]}")
         else:
             self.notify(

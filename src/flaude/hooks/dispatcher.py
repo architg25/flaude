@@ -101,6 +101,43 @@ _TERM_PROGRAM_MAP = {
 }
 
 
+def _detect_tty() -> str | None:
+    """Detect the TTY by walking up the process tree from our parent.
+
+    The hook's fds are all piped (no controlling terminal), but the parent
+    process (Claude Code) runs on a real TTY. We read it via ps.
+    """
+    import subprocess
+
+    pid = os.getppid()
+    for _ in range(5):
+        if pid <= 1:
+            break
+        try:
+            result = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "tty=,ppid="],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            break
+        parts = result.stdout.strip().split()
+        if not parts:
+            break
+        tty = parts[0]
+        if tty and tty != "??":
+            return f"/dev/{tty}"
+        if len(parts) >= 2:
+            try:
+                pid = int(parts[1])
+            except ValueError:
+                break
+        else:
+            break
+    return None
+
+
 def _detect_terminal_from_env() -> str | None:
     """Detect terminal from env vars set by the terminal emulator."""
     term = os.environ.get("TERM_PROGRAM", "")
@@ -172,6 +209,7 @@ def _load_or_create(event: dict, sm: StateManager) -> SessionState:
             cwd=event.get("cwd", ""),
             transcript_path=event.get("transcript_path"),
             terminal=_detect_terminal_from_env(),
+            tty=_detect_tty(),
             started_at=now,
             last_event_at=now,
         )
@@ -182,6 +220,8 @@ def _load_or_create(event: dict, sm: StateManager) -> SessionState:
         state.cwd = event["cwd"]
     if not state.terminal:
         state.terminal = _detect_terminal_from_env()
+    if not state.tty:
+        state.tty = _detect_tty()
     # Always update permission_mode — it can change during a session
     if event.get("permission_mode"):
         state.permission_mode = event["permission_mode"]
@@ -203,6 +243,7 @@ def _handle_session_start(event: dict, sm: StateManager) -> None:
         permission_mode=event.get("permission_mode", "default"),
         transcript_path=event.get("transcript_path"),
         terminal=_detect_terminal_from_env(),
+        tty=_detect_tty(),
         started_at=now,
         last_event="SessionStart",
         last_event_at=now,
