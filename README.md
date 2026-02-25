@@ -17,7 +17,7 @@ The hook dispatcher ships as a native Rust binary for fast invocation (~14ms vs 
 ### Features
 
 - **Live session dashboard** -- theme-aware status colors, context usage, uptime, and model info for all running sessions
-- **Terminal navigation** -- jump to any session's terminal tab/window with a keypress (iTerm2, Ghostty, Terminal.app, Warp, IntelliJ)
+- **Terminal navigation** -- jump to any session's terminal tab/window with a keypress. Full tab-level switching on iTerm2 (via TTY matching). Ghostty, Terminal.app, Warp, and IntelliJ are limited to bringing the app to the foreground — these terminals don't expose tab-switching APIs
 - **Session launcher** -- start new Claude sessions from the dashboard with directory autocomplete
 - **Notification system** -- terminal bell, macOS notifications, and system sounds when long-running turns finish (off by default, 🔔/🔕 indicator in title bar)
 - **Activity log** -- tail session transcripts in real time with three verbosity modes (All / Summary / Tools)
