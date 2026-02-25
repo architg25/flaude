@@ -1,0 +1,42 @@
+# Flaude
+
+Claude Code session manager — TUI dashboard for monitoring multiple concurrent Claude sessions.
+
+## Project Structure
+
+- `src/flaude/` — Python package (TUI, CLI, hooks, state management)
+- `rust/` — Native hook dispatcher (optional, ~18x faster than Python fallback)
+- `scripts/` — Developer tooling (version bump)
+- `tests/` — pytest suite
+
+## Version Management
+
+Version source of truth: `src/flaude/__init__.py` (`__version__`).
+`pyproject.toml` reads it dynamically via `[tool.hatch.version]`.
+`rust/Cargo.toml` version is cosmetic — kept in sync by the bump script.
+
+## Release Workflow
+
+When the user asks to push, ship, or release changes:
+
+1. **Determine bump level** from the commits since last tag:
+   - **Patch** (X.Y.Z → X.Y.Z+1): Bug fixes, docs, refactors, typo fixes, dependency updates, test-only changes
+   - **Minor** (X.Y.Z → X.Y+1.0): New features, new CLI commands, new config options, behavioral changes, new files with new functionality
+   - **Major**: Never auto-bump. Only the user decides when to bump major.
+
+2. **Run the bump script**: `python scripts/bump_version.py <new-version>`
+
+3. **Commit, tag, and push**:
+   ```
+   git commit -am 'Bump to <new-version>'
+   git tag v<new-version>
+   git push && git push --tags
+   ```
+
+Do NOT run this workflow on every commit. Only when explicitly asked to push/ship/release.
+
+## Running Tests
+
+```
+python -m pytest tests/ -x -q
+```

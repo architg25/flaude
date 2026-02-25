@@ -131,6 +131,20 @@ class FlaudeApp(App):
         self.set_interval(TUI_REFRESH_INTERVAL, self._refresh_state)
         self.set_interval(30.0, self._cleanup)
         self._refresh_state()
+        self.run_worker(self._check_for_update, thread=True)
+
+    def _check_for_update(self) -> None:
+        from flaude.version_check import check_for_update
+
+        result = check_for_update(self._config)
+        if result:
+            _save_config(self._config)
+            current, remote = result
+            self.notify(
+                f"Update available ({current} \u2192 {remote}). Run: flaude update",
+                severity="information",
+                timeout=10,
+            )
 
     def watch_theme(self, theme: str) -> None:
         """Save theme selection whenever it changes."""

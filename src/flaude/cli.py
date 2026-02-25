@@ -100,6 +100,69 @@ def _copy_default_rules() -> None:
     shutil.copy2(default_rules, RULES_PATH)
 
 
+_PIP_URL = "git+ssh://git@ghe.spotify.net/architg/flaude.git"
+
+
+def _load_config_yaml() -> dict:
+    """Load ~/.config/flaude/config.yaml."""
+    import yaml
+
+    from flaude.constants import CONFIG_PATH
+
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_config_yaml(config: dict) -> None:
+    """Persist config.yaml atomically."""
+    import yaml
+
+    from flaude.constants import CONFIG_PATH
+
+    try:
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = CONFIG_PATH.with_suffix(".yaml.tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            yaml.dump(config, f, default_flow_style=False)
+        os.rename(tmp, CONFIG_PATH)
+    except Exception:
+        pass
+
+
+def cmd_update(args: argparse.Namespace) -> None:
+    """Self-update flaude from the Git remote."""
+    import subprocess
+
+    from flaude import __version__
+
+    print(f"Current version: {__version__}")
+    print("Updating flaude...")
+
+    cmd = [sys.executable, "-m", "pip", "install", "--force-reinstall", _PIP_URL]
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        print("Update failed.", file=sys.stderr)
+        sys.exit(1)
+
+    # Read new version from the freshly installed package (can't re-import)
+    new_version = subprocess.run(
+        [sys.executable, "-c", "import flaude; print(flaude.__version__)"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    if new_version == __version__:
+        print(f"Already up to date ({__version__}).")
+    else:
+        print(f"Updated: {__version__} -> {new_version}")
+    print("\nRun 'flaude init' to re-register hooks if the hook binary was rebuilt.")
+
+
 def cmd_init(args: argparse.Namespace) -> None:
     """Install flaude hooks into Claude Code settings."""
     settings = _load_settings()
@@ -137,6 +200,19 @@ def cmd_init(args: argparse.Namespace) -> None:
     print(f"  Settings: {CLAUDE_SETTINGS_PATH}")
     print(f"  State dir: {SESSIONS_DIR.parent}")
     print(f"\nRun 'flaude' to start the dashboard.")
+
+    # Non-critical: check for updates
+    try:
+        from flaude.version_check import check_for_update
+
+        config = _load_config_yaml()
+        result = check_for_update(config)
+        if result:
+            _save_config_yaml(config)
+            current, remote = result
+            print(f"\n  Update available ({current} -> {remote}). Run: flaude update")
+    except Exception:
+        pass  # version check is best-effort
 
 
 def cmd_uninstall(args: argparse.Namespace) -> None:
@@ -305,6 +381,7 @@ def main() -> None:
             "  flaude              Launch the dashboard\n"
             "  flaude init         Install hooks into Claude Code\n"
             "  flaude status       Quick status table (no TUI)\n"
+            "  flaude update       Self-update from Git remote\n"
         ),
     )
     sub = parser.add_subparsers(dest="command")
@@ -331,12 +408,16 @@ def main() -> None:
     # status
     sub.add_parser("status", help="Quick status table without launching the TUI")
 
+    # update
+    sub.add_parser("update", help="Self-update flaude from Git remote")
+
     args = parser.parse_args()
 
     commands = {
         "init": cmd_init,
         "uninstall": cmd_uninstall,
         "status": cmd_status,
+        "update": cmd_update,
     }
 
     if args.command is None:
