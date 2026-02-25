@@ -36,15 +36,45 @@ Pressing `n` opens a directory picker with tab-completion and arrow-key navigati
 
 ### Notification system
 
-Flaude alerts you when a long-running turn finishes. Notifications are **off by default**. Configure via `S`:
+Flaude has two notification categories, both **off by default**. Toggle with `s`, configure with `S`.
 
-- **Notify on finish** -- master toggle (off by default)
-- **Terminal bell** -- rings the terminal bell (on by default when notifications enabled)
-- **macOS notification** -- native notification center alert showing project name, last prompt, and duration
-- **System sound** -- plays Glass.aiff
-- **Timer threshold** -- minutes before a turn is considered "long" (default: 5, supports decimals like 0.1 for 6 seconds)
+**Category 1: Long turn completion** -- fires when a turn finishes after exceeding a time threshold.
 
-Quick toggle with `s` to mute/unmute without opening settings. Notifications fire when a turn that exceeded the timer finishes, not while it's still running. The title bar shows 🔔 when notifications are on and 🔕 when off.
+| Setting            | Default | Description                                                                             |
+| ------------------ | ------- | --------------------------------------------------------------------------------------- |
+| Enabled            | ON      | Active when master toggle is on                                                         |
+| Terminal bell      | ON      | Rings the terminal bell                                                                 |
+| macOS notification | OFF     | Native notification showing project name, duration, last prompt                         |
+| System sound       | OFF     | Plays Glass.aiff                                                                        |
+| Timer (minutes)    | 5       | Threshold before a turn is considered "long" (supports decimals like 0.1 for 6 seconds) |
+
+Notification message: **"Flaude — \<project\>"** with subtitle **"Finished in \<duration\>"** and the last prompt as body text.
+
+**Category 2: Waiting on input** -- fires when a session has been waiting for user input for longer than a configurable delay.
+
+| Setting            | Default | Description                                                    |
+| ------------------ | ------- | -------------------------------------------------------------- |
+| Enabled            | OFF     | Must be explicitly enabled                                     |
+| Terminal bell      | ON      | Rings the terminal bell                                        |
+| macOS notification | OFF     | Native notification showing project name and wait reason       |
+| System sound       | OFF     | Plays Glass.aiff                                               |
+| Delay (seconds)    | 10      | How long to wait before firing (avoids noise from brief waits) |
+
+Notification message: **"Flaude — \<project\>"** with subtitle depending on status:
+
+- Permission prompt: **"Needs permission"**
+- User question: **"Needs your answer"**
+- Plan approval: **"Plan review needed"**
+
+Body text shows the pending question when available.
+
+**Behavior notes:**
+
+- `s` quick-toggles the master switch without opening settings
+- `S` opens the full settings dialog with per-category controls
+- Notifications only fire for **new** events after enabling — existing sessions that already finished or are already waiting won't trigger retroactively
+- Each session only fires once per event (a second alert requires the session to start a new turn or leave and re-enter a waiting state)
+- Title bar shows 🔔 when notifications are on and 🔕 when off
 
 ## Supported terminals
 
