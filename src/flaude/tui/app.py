@@ -1,5 +1,7 @@
 """Main Textual TUI application."""
 
+from __future__ import annotations
+
 import os
 
 import yaml
@@ -16,6 +18,7 @@ from flaude.state.scanner import scan_preexisting_sessions
 from flaude.terminal.detect import detect_terminal
 from flaude.terminal.launch import launch_session
 from flaude.terminal.navigate import navigate_to_session
+from flaude.tui.notifications import NotificationManager
 from flaude.tui.screens.input_dialog import InputDialog
 from flaude.tui.screens.help_dialog import HelpDialog
 from flaude.tui.screens.notification_settings import NotificationSettings
@@ -23,6 +26,12 @@ from flaude.tui.widgets.session_table import SessionTable
 from flaude.tui.widgets.session_detail import SessionDetail
 from flaude.tui.widgets.permission_panel import PermissionPanel
 from flaude.tui.widgets.activity_log import ActivityLog
+
+_WAITING_STATUSES = (
+    SessionStatus.WAITING_PERMISSION,
+    SessionStatus.WAITING_ANSWER,
+    SessionStatus.PLAN,
+)
 
 
 def _load_config() -> dict:
@@ -44,6 +53,34 @@ def _save_config(config: dict) -> None:
         os.rename(tmp, CONFIG_PATH)
     except Exception:
         pass  # config save is best-effort
+
+
+def _migrate_notifications_config(config: dict) -> dict:
+    """Migrate flat notification config to two-category format. Idempotent."""
+    notif = config.get("notifications", {})
+
+    # Already migrated if nested category dicts exist
+    if isinstance(notif.get("long_turn_completion"), dict):
+        return config
+
+    config["notifications"] = {
+        "enabled": notif.get("enabled", False),
+        "long_turn_completion": {
+            "enabled": True,
+            "terminal_bell": notif.get("terminal_bell", True),
+            "macos_alert": notif.get("macos_alert", False),
+            "system_sound": notif.get("system_sound", False),
+            "long_turn_minutes": notif.get("long_turn_minutes", 5),
+        },
+        "waiting_on_input": {
+            "enabled": False,
+            "terminal_bell": True,
+            "macos_alert": False,
+            "system_sound": False,
+            "delay_seconds": 10,
+        },
+    }
+    return config
 
 
 class FlaudeApp(App):
@@ -70,8 +107,10 @@ class FlaudeApp(App):
         self._mgr = StateManager()
         self._fallback_terminal = detect_terminal()
         self._config = _load_config()
+        self._config = _migrate_notifications_config(self._config)
+        _save_config(self._config)
         self.theme = self._config.get("theme", DEFAULT_THEME)
-        self._alerted_turns: set[str] = set()
+        self._notifier = NotificationManager(bell=self.bell)
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -88,6 +127,7 @@ class FlaudeApp(App):
 
     def on_mount(self) -> None:
         scan_preexisting_sessions(self._mgr)
+        self._sync_notifier()
         self.set_interval(TUI_REFRESH_INTERVAL, self._refresh_state)
         self.set_interval(30.0, self._cleanup)
         self._refresh_state()
@@ -124,16 +164,7 @@ class FlaudeApp(App):
             log.set_transcript_path(None)
         log.refresh_log()
 
-        waiting = sum(
-            1
-            for s in active.values()
-            if s.status
-            in (
-                SessionStatus.WAITING_PERMISSION,
-                SessionStatus.WAITING_ANSWER,
-                SessionStatus.PLAN,
-            )
-        )
+        waiting = sum(1 for s in active.values() if s.status in _WAITING_STATUSES)
         notif = self._config.get("notifications", {})
         notif_icon = "🔔" if notif.get("enabled", False) else "🔕"
         if waiting:
@@ -143,23 +174,7 @@ class FlaudeApp(App):
         else:
             self.title = f"Flaude ({len(active)} sessions) {notif_icon}"
 
-        # Alert when a long turn finishes
-        if notif.get("enabled", False):
-            threshold = notif.get("long_turn_minutes", 5) * 60
-            for sid, state in active.items():
-                if (
-                    state.last_turn_duration > threshold
-                    and state.turn_started_at is None
-                    and sid not in self._alerted_turns
-                ):
-                    self._fire_alert(state)
-                    self._alerted_turns.add(sid)
-                # Reset when a new turn starts
-                if state.turn_started_at is not None:
-                    self._alerted_turns.discard(sid)
-
-        # Prune alerted set so ended sessions don't leak memory
-        self._alerted_turns &= set(active.keys())
+        self._notifier.check(active, notif)
 
     def _cleanup(self) -> None:
         cleanup_stale_sessions(self._mgr)
@@ -223,78 +238,47 @@ class FlaudeApp(App):
 
         self.notify(f"Log: {MODE_LABELS[log.mode]}")
 
-    def _fire_alert(self, state) -> None:
-        """Fire configured notification methods."""
-        import subprocess
-        from pathlib import Path
+    # ------------------------------------------------------------------
+    # Notification actions
+    # ------------------------------------------------------------------
 
+    def _sync_notifier(self) -> None:
+        """Seed or clear the notifier based on current config."""
         notif = self._config.get("notifications", {})
-        project = Path(state.cwd).name if state.cwd else state.session_id[:8]
-        duration = _format_alert_duration(state.last_turn_duration)
-        prompt_preview = (
-            (state.last_prompt or "")[:80].replace("\\", "\\\\").replace('"', '\\"')
-        )
-
-        if notif.get("terminal_bell", True):
-            self.bell()
-        if notif.get("system_sound", False):
-            subprocess.Popen(
-                ["afplay", "/System/Library/Sounds/Glass.aiff"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        if notif.get("macos_alert", False):
-            subprocess.Popen(
-                [
-                    "osascript",
-                    "-e",
-                    f'display notification "{prompt_preview}" '
-                    f'with title "Flaude — {project}" subtitle "Finished in {duration}"',
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+        if notif.get("enabled", False):
+            active = {
+                sid: s
+                for sid, s in self._mgr.load_all_sessions().items()
+                if s.status != SessionStatus.ENDED
+            }
+            self._notifier.seed(active, notif)
+        else:
+            self._notifier.clear()
 
     def action_toggle_notifications(self) -> None:
         notif = self._config.setdefault("notifications", {})
         enabled = not notif.get("enabled", False)
         notif["enabled"] = enabled
         _save_config(self._config)
-        if enabled:
-            self.notify("Notifications: ON")
-        else:
-            self.notify("Notifications: OFF")
-            self._alerted_turns.clear()
+        self._sync_notifier()
+        self.notify(f"Notifications: {'ON' if enabled else 'OFF'}")
 
     def action_notification_settings(self) -> None:
-        current = self._config.get(
-            "notifications",
-            {
-                "enabled": False,
-                "terminal_bell": True,
-                "macos_alert": False,
-                "system_sound": False,
-                "long_turn_minutes": 5,
-            },
-        )
+        current = self._config.get("notifications", {})
+        current = _migrate_notifications_config({"notifications": current})[
+            "notifications"
+        ]
 
         def on_result(result: dict | None) -> None:
             if result is None:
                 return
             self._config["notifications"] = result
             _save_config(self._config)
-            self._alerted_turns.clear()
+            self._sync_notifier()
             status = "ON" if result["enabled"] else "OFF"
-            self.notify(f"Notifications: {status} ({result['long_turn_minutes']}min)")
+            self.notify(f"Notifications: {status}")
 
         self.push_screen(NotificationSettings(current), on_result)
 
     def action_help(self) -> None:
         self.push_screen(HelpDialog())
-
-
-def _format_alert_duration(seconds: float) -> str:
-    mins = int(seconds // 60)
-    if mins < 60:
-        return f"{mins}m"
-    return f"{mins // 60}h{mins % 60}m"
