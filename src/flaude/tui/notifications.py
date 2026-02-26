@@ -16,13 +16,8 @@ from pathlib import Path
 from typing import Callable
 
 from flaude.constants import utcnow
-from flaude.state.models import SessionState, SessionStatus
-
-_WAITING_STATUSES = (
-    SessionStatus.WAITING_PERMISSION,
-    SessionStatus.WAITING_ANSWER,
-    SessionStatus.PLAN,
-)
+from flaude.formatting import format_duration_seconds
+from flaude.state.models import SessionState, SessionStatus, WAITING_STATUSES
 
 _WAITING_LABELS = {
     SessionStatus.WAITING_PERMISSION: "Needs permission",
@@ -91,7 +86,7 @@ class NotificationManager:
                 continue
             if state.last_turn_duration > threshold and state.turn_started_at is None:
                 self._alerted_turns.add(sid)
-            if state.status in _WAITING_STATUSES:
+            if state.status in WAITING_STATUSES:
                 self._alerted_waiting.add(sid)
 
     def clear(self) -> None:
@@ -120,7 +115,7 @@ class NotificationManager:
 
     def _fire_long_turn(self, state: SessionState, cfg: dict) -> None:
         project = Path(state.cwd).name if state.cwd else state.session_id[:8]
-        duration = _format_duration(state.last_turn_duration)
+        duration = format_duration_seconds(state.last_turn_duration)
         body = (state.last_prompt or "")[:80]
         self._fire(cfg, f"Flaude — {project}", f"Finished in {duration}", body)
 
@@ -132,7 +127,7 @@ class NotificationManager:
         delay = cfg.get("delay_seconds", 10)
         now = utcnow()
         for sid, state in active.items():
-            is_waiting = state.status in _WAITING_STATUSES
+            is_waiting = state.status in WAITING_STATUSES
             if is_waiting and sid not in self._alerted_waiting:
                 if sid not in self._waiting_entered_at:
                     self._waiting_entered_at[sid] = now
@@ -191,10 +186,3 @@ class NotificationManager:
         for sid in list(self._waiting_entered_at):
             if sid not in active_keys:
                 del self._waiting_entered_at[sid]
-
-
-def _format_duration(seconds: float) -> str:
-    mins = int(seconds // 60)
-    if mins < 60:
-        return f"{mins}m"
-    return f"{mins // 60}h{mins % 60}m"

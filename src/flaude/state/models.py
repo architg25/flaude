@@ -43,6 +43,13 @@ STATUS_INFO: dict[SessionStatus, StatusInfo] = {
 }
 
 
+WAITING_STATUSES = (
+    SessionStatus.WAITING_PERMISSION,
+    SessionStatus.WAITING_ANSWER,
+    SessionStatus.PLAN,
+)
+
+
 class LastTool(BaseModel):
     name: str
     summary: str

@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from flaude.constants import (
@@ -22,6 +23,7 @@ from flaude.constants import (
 from flaude.rules.engine import RulesEngine
 from flaude.state.manager import StateManager
 from flaude.state.models import LastTool, SessionState, SessionStatus
+from flaude.tools import summarize_tool, trunc
 
 
 # ---------------------------------------------------------------------------
@@ -42,37 +44,6 @@ def _log(session_id: str, event: str, detail: str = "") -> None:
             f.write(line)
     except Exception:
         pass  # logging must never break the hook
-
-
-# ---------------------------------------------------------------------------
-# Tool-input summarization
-# ---------------------------------------------------------------------------
-
-_SUMMARIZERS: dict[str, object] = {
-    "Bash": lambda inp: _trunc(inp.get("command", ""), 80),
-    "Edit": lambda inp: _basename(inp.get("file_path", "")),
-    "Write": lambda inp: _basename(inp.get("file_path", "")),
-    "Read": lambda inp: _basename(inp.get("file_path", "")),
-    "Grep": lambda inp: _trunc(inp.get("pattern", ""), 40),
-    "Glob": lambda inp: inp.get("pattern", ""),
-    "Task": lambda inp: _trunc(inp.get("prompt", ""), 60),
-    "WebFetch": lambda inp: _trunc(inp.get("url", ""), 60),
-}
-
-
-def _trunc(s: str, n: int) -> str:
-    return s[:n] + ("..." if len(s) > n else "")
-
-
-def _basename(path: str) -> str:
-    return Path(path).name if path else ""
-
-
-def _summarize_tool(tool_name: str, tool_input: dict) -> str:
-    fn = _SUMMARIZERS.get(tool_name)
-    if fn:
-        return fn(tool_input)
-    return tool_name
 
 
 # ---------------------------------------------------------------------------
@@ -259,7 +230,7 @@ def _handle_pre_tool_use(event: dict, sm: StateManager) -> None:
 
     state = _load_or_create(event, sm)
 
-    summary = _summarize_tool(tool_name, tool_input)
+    summary = summarize_tool(tool_name, tool_input)
     state.last_tool = LastTool(name=tool_name, summary=summary, at=now)
     state.tool_stats[tool_name] = state.tool_stats.get(tool_name, 0) + 1
     state.status = SessionStatus.WORKING
@@ -330,7 +301,7 @@ def _handle_notification(event: dict, sm: StateManager) -> None:
     state.last_event = "Notification"
     state.last_event_at = utcnow()
     sm.save_session(state)
-    _log(state.session_id, "Notification", _trunc(message, 60))
+    _log(state.session_id, "Notification", trunc(message, 60))
 
 
 def _handle_user_prompt_submit(event: dict, sm: StateManager) -> None:
@@ -343,7 +314,7 @@ def _handle_user_prompt_submit(event: dict, sm: StateManager) -> None:
     state.last_event = "UserPromptSubmit"
     state.last_event_at = utcnow()
     sm.save_session(state)
-    _log(state.session_id, "UserPrompt", _trunc(prompt, 80) if prompt else "")
+    _log(state.session_id, "UserPrompt", trunc(prompt, 80) if prompt else "")
 
 
 def _handle_subagent_stop(event: dict, sm: StateManager) -> None:
@@ -370,7 +341,7 @@ def _handle_session_end(event: dict, sm: StateManager) -> None:
 # Router
 # ---------------------------------------------------------------------------
 
-_HANDLERS: dict[str, object] = {
+_HANDLERS: dict[str, Callable[[dict, StateManager], None]] = {
     "SessionStart": _handle_session_start,
     "PreToolUse": _handle_pre_tool_use,
     "PostToolUse": _handle_post_tool_use,

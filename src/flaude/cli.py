@@ -22,6 +22,7 @@ from flaude.constants import (
     get_model_limit,
     utcnow,
 )
+from flaude.config import load_config, save_config
 from flaude.formatting import format_token_count, format_uptime
 
 
@@ -103,37 +104,6 @@ def _copy_default_rules() -> None:
 _PIP_URL = "git+ssh://git@ghe.spotify.net/architg/flaude.git"
 
 
-def _load_config_yaml() -> dict:
-    """Load ~/.config/flaude/config.yaml."""
-    import yaml
-
-    from flaude.constants import CONFIG_PATH
-
-    if CONFIG_PATH.exists():
-        try:
-            with open(CONFIG_PATH, encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
-        except Exception:
-            return {}
-    return {}
-
-
-def _save_config_yaml(config: dict) -> None:
-    """Persist config.yaml atomically."""
-    import yaml
-
-    from flaude.constants import CONFIG_PATH
-
-    try:
-        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp = CONFIG_PATH.with_suffix(".yaml.tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            yaml.dump(config, f, default_flow_style=False)
-        os.rename(tmp, CONFIG_PATH)
-    except Exception:
-        pass
-
-
 def cmd_update(args: argparse.Namespace) -> None:
     """Self-update flaude from the Git remote."""
     import subprocess
@@ -205,10 +175,10 @@ def cmd_init(args: argparse.Namespace) -> None:
     try:
         from flaude.version_check import check_for_update
 
-        config = _load_config_yaml()
+        config = load_config()
         result = check_for_update(config)
         if result:
-            _save_config_yaml(config)
+            save_config(config)
             current, remote = result
             print(f"\n  Update available ({current} -> {remote}). Run: flaude update")
     except Exception:

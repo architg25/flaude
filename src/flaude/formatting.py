@@ -28,6 +28,14 @@ def format_compact_duration(now: datetime, since: datetime) -> str:
     return f"{hours}h{mins % 60:02d}m"
 
 
+def format_duration_seconds(seconds: float) -> str:
+    """Format a duration in seconds as 'Xm' or 'XhYm'."""
+    mins = int(seconds // 60)
+    if mins < 60:
+        return f"{mins}m"
+    return f"{mins // 60}h{mins % 60}m"
+
+
 def format_token_count(tokens: int) -> str:
     """Format a token count as a human-readable string (e.g., '269K', '1.0M')."""
     if tokens >= 1_000_000:

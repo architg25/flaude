@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import os
-
-import yaml
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, DataTable
 
-from flaude.constants import CONFIG_PATH, DEFAULT_THEME, TUI_REFRESH_INTERVAL, utcnow
+from flaude.config import load_config, save_config, migrate_notifications_config
+from flaude.constants import DEFAULT_THEME, TUI_REFRESH_INTERVAL, utcnow
 from flaude.state.manager import StateManager
-from flaude.state.models import SessionStatus
+from flaude.state.models import SessionStatus, WAITING_STATUSES
 from flaude.state.cleanup import cleanup_stale_sessions
 from flaude.state.scanner import scan_preexisting_sessions
 from flaude.terminal.detect import detect_terminal
@@ -26,61 +24,6 @@ from flaude.tui.widgets.session_table import SessionTable
 from flaude.tui.widgets.session_detail import SessionDetail
 from flaude.tui.widgets.permission_panel import PermissionPanel
 from flaude.tui.widgets.activity_log import ActivityLog
-
-_WAITING_STATUSES = (
-    SessionStatus.WAITING_PERMISSION,
-    SessionStatus.WAITING_ANSWER,
-    SessionStatus.PLAN,
-)
-
-
-def _load_config() -> dict:
-    if CONFIG_PATH.exists():
-        try:
-            with open(CONFIG_PATH, encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
-        except Exception:
-            return {}
-    return {}
-
-
-def _save_config(config: dict) -> None:
-    try:
-        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        tmp = CONFIG_PATH.with_suffix(".yaml.tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            yaml.dump(config, f, default_flow_style=False)
-        os.rename(tmp, CONFIG_PATH)
-    except Exception:
-        pass  # config save is best-effort
-
-
-def _migrate_notifications_config(config: dict) -> dict:
-    """Migrate flat notification config to two-category format. Idempotent."""
-    notif = config.get("notifications", {})
-
-    # Already migrated if nested category dicts exist
-    if isinstance(notif.get("long_turn_completion"), dict):
-        return config
-
-    config["notifications"] = {
-        "enabled": notif.get("enabled", False),
-        "long_turn_completion": {
-            "enabled": True,
-            "terminal_bell": notif.get("terminal_bell", True),
-            "macos_alert": notif.get("macos_alert", False),
-            "system_sound": notif.get("system_sound", False),
-            "long_turn_minutes": notif.get("long_turn_minutes", 5),
-        },
-        "waiting_on_input": {
-            "enabled": False,
-            "terminal_bell": True,
-            "macos_alert": False,
-            "system_sound": False,
-            "delay_seconds": 10,
-        },
-    }
-    return config
 
 
 class FlaudeApp(App):
@@ -106,9 +49,9 @@ class FlaudeApp(App):
         super().__init__()
         self._mgr = StateManager()
         self._fallback_terminal = detect_terminal()
-        self._config = _load_config()
-        self._config = _migrate_notifications_config(self._config)
-        _save_config(self._config)
+        self._config = load_config()
+        self._config = migrate_notifications_config(self._config)
+        save_config(self._config)
         self.theme = self._config.get("theme", DEFAULT_THEME)
         self._notifier = NotificationManager(bell=self.bell)
 
@@ -129,7 +72,7 @@ class FlaudeApp(App):
         scan_preexisting_sessions(self._mgr)
         self._sync_notifier()
         self.set_interval(TUI_REFRESH_INTERVAL, self._refresh_state)
-        self.set_interval(30.0, self._cleanup)
+        self.set_interval(30.0, self._schedule_cleanup)
         self._refresh_state()
         self.run_worker(self._check_for_update, thread=True)
 
@@ -138,7 +81,7 @@ class FlaudeApp(App):
 
         result = check_for_update(self._config)
         if result:
-            _save_config(self._config)
+            save_config(self._config)
             current, remote = result
             self.notify(
                 f"Update available ({current} \u2192 {remote}). Run: flaude update",
@@ -149,7 +92,7 @@ class FlaudeApp(App):
     def watch_theme(self, theme: str) -> None:
         """Save theme selection whenever it changes."""
         self._config["theme"] = theme
-        _save_config(self._config)
+        save_config(self._config)
 
     def _refresh_state(self) -> None:
         sessions = self._mgr.load_all_sessions()
@@ -178,7 +121,7 @@ class FlaudeApp(App):
             log.set_transcript_path(None)
         log.refresh_log()
 
-        waiting = sum(1 for s in active.values() if s.status in _WAITING_STATUSES)
+        waiting = sum(1 for s in active.values() if s.status in WAITING_STATUSES)
         notif = self._config.get("notifications", {})
         notif_icon = "🔔" if notif.get("enabled", False) else "🔕"
         if waiting:
@@ -189,6 +132,9 @@ class FlaudeApp(App):
             self.title = f"Flaude ({len(active)} sessions) {notif_icon}"
 
         self._notifier.check(active, notif)
+
+    def _schedule_cleanup(self) -> None:
+        self.run_worker(self._cleanup, thread=True)
 
     def _cleanup(self) -> None:
         cleanup_stale_sessions(self._mgr)
@@ -247,7 +193,7 @@ class FlaudeApp(App):
         log = self.query_one(ActivityLog)
         log.cycle_mode()
         self._config["log_mode"] = log.mode
-        _save_config(self._config)
+        save_config(self._config)
         from flaude.tui.widgets.activity_log import MODE_LABELS
 
         self.notify(f"Log: {MODE_LABELS[log.mode]}")
@@ -273,13 +219,13 @@ class FlaudeApp(App):
         notif = self._config.setdefault("notifications", {})
         enabled = not notif.get("enabled", False)
         notif["enabled"] = enabled
-        _save_config(self._config)
+        save_config(self._config)
         self._sync_notifier()
         self.notify(f"Notifications: {'ON' if enabled else 'OFF'}")
 
     def action_notification_settings(self) -> None:
         current = self._config.get("notifications", {})
-        current = _migrate_notifications_config({"notifications": current})[
+        current = migrate_notifications_config({"notifications": current})[
             "notifications"
         ]
 
@@ -287,7 +233,7 @@ class FlaudeApp(App):
             if result is None:
                 return
             self._config["notifications"] = result
-            _save_config(self._config)
+            save_config(self._config)
             self._sync_notifier()
             status = "ON" if result["enabled"] else "OFF"
             self.notify(f"Notifications: {status}")

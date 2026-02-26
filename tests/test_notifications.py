@@ -9,7 +9,8 @@ from unittest.mock import MagicMock
 
 from helpers import make_state
 from flaude.state.models import SessionStatus
-from flaude.tui.notifications import NotificationManager, _format_duration
+from flaude.formatting import format_duration_seconds
+from flaude.tui.notifications import NotificationManager
 
 
 def _config(
@@ -274,10 +275,10 @@ class TestClear:
 
 class TestFormatDuration:
     def test_minutes(self):
-        assert _format_duration(300) == "5m"
+        assert format_duration_seconds(300) == "5m"
 
     def test_hours(self):
-        assert _format_duration(3900) == "1h5m"
+        assert format_duration_seconds(3900) == "1h5m"
 
     def test_zero(self):
-        assert _format_duration(0) == "0m"
+        assert format_duration_seconds(0) == "0m"

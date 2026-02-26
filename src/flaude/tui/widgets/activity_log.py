@@ -6,6 +6,7 @@ from pathlib import Path
 from textual.widgets import RichLog
 
 from flaude.constants import ACTIVITY_LOG
+from flaude.tools import summarize_tool
 
 MODES = ["all", "summary", "tools"]
 MODE_LABELS = {"all": "All", "summary": "Summary", "tools": "Tools"}
@@ -70,7 +71,11 @@ class ActivityLog(RichLog):
             return
         try:
             size = ACTIVITY_LOG.stat().st_size
-            if size <= self._tools_last_size:
+            if size < self._tools_last_size:
+                # File was truncated (e.g., log rotation) — reset
+                self.clear()
+                self._tools_last_size = 0
+            if size == self._tools_last_size:
                 return
             with open(ACTIVITY_LOG) as f:
                 f.seek(self._tools_last_size)
@@ -92,7 +97,11 @@ class ActivityLog(RichLog):
             return
         try:
             size = path.stat().st_size
-            if size <= self._transcript_last_size:
+            if size < self._transcript_last_size:
+                # File was truncated — reset
+                self.clear()
+                self._transcript_last_size = 0
+            if size == self._transcript_last_size:
                 return
             with open(path) as f:
                 f.seek(self._transcript_last_size)
@@ -144,25 +153,10 @@ class ActivityLog(RichLog):
             elif item_type == "tool_use":
                 name = item.get("name", "?")
                 tool_input = item.get("input", {})
-                summary = _summarize_tool_input(name, tool_input)
+                summary = summarize_tool(name, tool_input)
                 return f"⚙ [cyan bold]{name}[/] [dim]{summary}[/]"
 
             elif item_type == "tool_result":
                 continue
 
         return None
-
-
-def _summarize_tool_input(name: str, tool_input: dict) -> str:
-    if name == "Bash":
-        return (tool_input.get("command", ""))[:60]
-    if name in ("Edit", "Write", "Read", "MultiEdit"):
-        path = tool_input.get("file_path", "")
-        return path.rsplit("/", 1)[-1] if path else ""
-    if name == "Grep":
-        return tool_input.get("pattern", "")[:40]
-    if name == "Glob":
-        return tool_input.get("pattern", "")
-    if name == "Task":
-        return tool_input.get("prompt", "")[:40]
-    return ""

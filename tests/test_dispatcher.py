@@ -8,7 +8,6 @@ import pytest
 
 from helpers import make_state
 from flaude.hooks.dispatcher import (
-    _basename,
     _detect_terminal_from_env,
     _get_usage_from_transcript,
     _handle_notification,
@@ -21,9 +20,8 @@ from flaude.hooks.dispatcher import (
     _handle_user_prompt_submit,
     _load_or_create,
     _log,
-    _summarize_tool,
-    _trunc,
 )
+from flaude.tools import basename, summarize_tool, trunc
 from flaude.state.models import SessionStatus
 
 
@@ -34,27 +32,27 @@ from flaude.state.models import SessionStatus
 
 class TestTrunc:
     def test_short_string_no_ellipsis(self):
-        assert _trunc("hello", 10) == "hello"
+        assert trunc("hello", 10) == "hello"
 
     def test_exact_length_no_ellipsis(self):
-        assert _trunc("hello", 5) == "hello"
+        assert trunc("hello", 5) == "hello"
 
     def test_long_string_adds_ellipsis(self):
-        assert _trunc("hello world", 5) == "hello..."
+        assert trunc("hello world", 5) == "hello..."
 
     def test_empty_string(self):
-        assert _trunc("", 10) == ""
+        assert trunc("", 10) == ""
 
 
 class TestBasename:
     def test_full_path(self):
-        assert _basename("/home/user/project/foo.py") == "foo.py"
+        assert basename("/home/user/project/foo.py") == "foo.py"
 
     def test_empty_string(self):
-        assert _basename("") == ""
+        assert basename("") == ""
 
     def test_just_filename(self):
-        assert _basename("foo.py") == "foo.py"
+        assert basename("foo.py") == "foo.py"
 
 
 # ---------------------------------------------------------------------------
@@ -65,37 +63,37 @@ class TestBasename:
 class TestSummarizeTool:
     def test_bash_truncates_command(self):
         cmd = "x" * 100
-        result = _summarize_tool("Bash", {"command": cmd})
+        result = summarize_tool("Bash", {"command": cmd})
         assert result == cmd[:80] + "..."
 
     def test_bash_short_command(self):
-        assert _summarize_tool("Bash", {"command": "ls"}) == "ls"
+        assert summarize_tool("Bash", {"command": "ls"}) == "ls"
 
     @pytest.mark.parametrize("tool", ["Edit", "Write", "Read"])
-    def test_file_tools_extract_basename(self, tool):
-        result = _summarize_tool(tool, {"file_path": "/home/user/project/main.py"})
+    def test_file_tools_extractbasename(self, tool):
+        result = summarize_tool(tool, {"file_path": "/home/user/project/main.py"})
         assert result == "main.py"
 
     def test_grep_truncates_pattern(self):
         pat = "a" * 50
-        result = _summarize_tool("Grep", {"pattern": pat})
+        result = summarize_tool("Grep", {"pattern": pat})
         assert result == pat[:40] + "..."
 
     def test_glob_returns_pattern(self):
-        assert _summarize_tool("Glob", {"pattern": "**/*.py"}) == "**/*.py"
+        assert summarize_tool("Glob", {"pattern": "**/*.py"}) == "**/*.py"
 
     def test_task_truncates_prompt(self):
         prompt = "p" * 80
-        result = _summarize_tool("Task", {"prompt": prompt})
+        result = summarize_tool("Task", {"prompt": prompt})
         assert result == prompt[:60] + "..."
 
     def test_webfetch_truncates_url(self):
         url = "https://example.com/" + "x" * 60
-        result = _summarize_tool("WebFetch", {"url": url})
+        result = summarize_tool("WebFetch", {"url": url})
         assert len(result) == 63  # 60 + "..."
 
     def test_unknown_tool_returns_name(self):
-        assert _summarize_tool("SomeFancyTool", {"whatever": 1}) == "SomeFancyTool"
+        assert summarize_tool("SomeFancyTool", {"whatever": 1}) == "SomeFancyTool"
 
     @pytest.mark.parametrize(
         "tool,expected",
@@ -110,7 +108,7 @@ class TestSummarizeTool:
     )
     def test_missing_keys_return_empty(self, tool, expected):
         """Summarizers handle empty dicts gracefully."""
-        result = _summarize_tool(tool, {})
+        result = summarize_tool(tool, {})
         assert result == expected
 
 
