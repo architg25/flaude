@@ -34,6 +34,7 @@ When the user asks to push, ship, or release changes:
    ```
 
 Do NOT run this workflow on every commit. Only when explicitly asked to push/ship/release.
+Do NOT bump the version for documentation-only changes (README, docs/, CLAUDE.md, comments). Just commit and push directly.
 
 ## Running Tests
 
