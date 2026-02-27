@@ -96,10 +96,11 @@ class TestQuestionAnswerFlow:
         assert state.status == SessionStatus.WAITING_ANSWER
         assert state.pending_question == question
 
-        # PostToolUse clears the pending question
+        # PostToolUse clears the pending question and resets status
         _handle_post_tool_use(_ev(tool_name="AskUserQuestion"), mgr)
         state = mgr.load_session(SID)
         assert state.pending_question is None
+        assert state.status == SessionStatus.WORKING
 
         # User answers
         _handle_user_prompt_submit(_ev(user_prompt="Use Redis"), mgr)
@@ -124,6 +125,7 @@ class TestExitPlanModeFlow:
         _handle_post_tool_use(_ev(tool_name="ExitPlanMode"), mgr)
         state = mgr.load_session(SID)
         assert state.pending_question is None
+        assert state.status == SessionStatus.WORKING
 
 
 class TestLateJoiningSession:

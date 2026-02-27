@@ -36,6 +36,10 @@ When the user asks to push, ship, or release changes:
 Do NOT run this workflow on every commit. Only when explicitly asked to push/ship/release.
 Do NOT bump the version for documentation-only changes (README, docs/, CLAUDE.md, comments). Just commit and push directly.
 
+## Hook Dispatcher Parity
+
+The hook dispatcher exists in two implementations: Python (`src/flaude/hooks/dispatcher.py`) and Rust (`rust/src/main.rs`). When changing one, always check if the same change applies to the other.
+
 ## Running Tests
 
 ```

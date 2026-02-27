@@ -648,6 +648,12 @@ fn handle_post_tool_use(event: &serde_json::Value) {
     state.last_event = "PostToolUse".into();
     state.last_event_at = utcnow();
     state.pending_question = None;
+    if matches!(
+        state.status,
+        SessionStatus::WaitingAnswer | SessionStatus::Plan | SessionStatus::WaitingPermission
+    ) {
+        state.status = SessionStatus::Working;
+    }
 
     let (tokens, model) = get_usage_from_transcript(state.transcript_path.as_deref());
     state.context_tokens = tokens;

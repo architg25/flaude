@@ -268,6 +268,12 @@ def _handle_post_tool_use(event: dict, sm: StateManager) -> None:
     state.last_event = "PostToolUse"
     state.last_event_at = utcnow()
     state.pending_question = None
+    if state.status in (
+        SessionStatus.WAITING_ANSWER,
+        SessionStatus.PLAN,
+        SessionStatus.WAITING_PERMISSION,
+    ):
+        state.status = SessionStatus.WORKING
     tokens, model = _get_usage_from_transcript(state.transcript_path)
     state.context_tokens = tokens
     if model:
