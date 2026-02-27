@@ -18,8 +18,9 @@ from flaude.hooks.dispatcher import (
     _handle_stop,
     _handle_user_prompt_submit,
 )
+from flaude.constants import utcnow
 from flaude.rules.engine import RulesEngine
-from flaude.state.cleanup import cleanup_stale_sessions
+from flaude.state.cleanup import cleanup_stale_sessions, correct_stale_waiting
 from flaude.state.models import SessionStatus
 
 SID = "scenario-sess-1"
@@ -252,3 +253,107 @@ class TestCleanupWithMixedSessions:
         assert mgr.load_session("stale") is None
         assert mgr.load_session("orphan") is None
         assert mgr.load_session("waiting") is not None
+
+
+class TestStaleWaitingCorrection:
+    """Waiting states should be cleared when transcript shows the session moved on."""
+
+    def test_stale_waiting_permission_corrected(self, mgr, tmp_path):
+        """Transcript modified after last_event_at → status corrected to WORKING."""
+        transcript = tmp_path / "transcript.jsonl"
+        # Write transcript content — mtime will be "now", well after old_time
+        transcript.write_text('{"message":{"role":"assistant"}}\n')
+
+        old_time = utcnow() - timedelta(seconds=30)
+        state = make_state(
+            "stuck",
+            status=SessionStatus.WAITING_PERMISSION,
+            last_event_at=old_time,
+            transcript_path=str(transcript),
+        )
+        mgr.save_session(state)
+
+        sessions = mgr.load_all_sessions()
+        corrected = correct_stale_waiting(mgr, sessions)
+        assert corrected == 1
+
+        fixed = mgr.load_session("stuck")
+        assert fixed.status == SessionStatus.WORKING
+
+    def test_stale_plan_corrected(self, mgr, tmp_path):
+        """PLAN status also gets corrected."""
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text('{"message":{"role":"assistant"}}\n')
+
+        old_time = utcnow() - timedelta(seconds=30)
+        state = make_state(
+            "plan-stuck",
+            status=SessionStatus.PLAN,
+            last_event_at=old_time,
+            transcript_path=str(transcript),
+        )
+        mgr.save_session(state)
+
+        sessions = mgr.load_all_sessions()
+        corrected = correct_stale_waiting(mgr, sessions)
+        assert corrected == 1
+        assert mgr.load_session("plan-stuck").status == SessionStatus.WORKING
+
+    def test_fresh_waiting_not_corrected(self, mgr, tmp_path):
+        """Waiting state < 5s old should NOT be corrected."""
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text('{"message":{"role":"assistant"}}\n')
+
+        state = make_state(
+            "fresh-wait",
+            status=SessionStatus.WAITING_PERMISSION,
+            last_event_at=utcnow(),
+            transcript_path=str(transcript),
+        )
+        mgr.save_session(state)
+
+        sessions = mgr.load_all_sessions()
+        corrected = correct_stale_waiting(mgr, sessions)
+        assert corrected == 0
+        assert mgr.load_session("fresh-wait").status == SessionStatus.WAITING_PERMISSION
+
+    def test_no_transcript_not_corrected(self, mgr):
+        """No transcript path → skip correction."""
+        old_time = utcnow() - timedelta(seconds=30)
+        state = make_state(
+            "no-transcript",
+            status=SessionStatus.WAITING_PERMISSION,
+            last_event_at=old_time,
+        )
+        mgr.save_session(state)
+
+        sessions = mgr.load_all_sessions()
+        corrected = correct_stale_waiting(mgr, sessions)
+        assert corrected == 0
+        assert (
+            mgr.load_session("no-transcript").status == SessionStatus.WAITING_PERMISSION
+        )
+
+    def test_transcript_not_modified_not_corrected(self, mgr, tmp_path):
+        """Transcript older than last_event_at → user still deciding, don't correct."""
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text('{"message":{"role":"assistant"}}\n')
+
+        # Set transcript mtime to the past (before the event)
+        import os
+
+        old_mtime = (utcnow() - timedelta(seconds=60)).timestamp()
+        os.utime(transcript, (old_mtime, old_mtime))
+
+        state = make_state(
+            "user-thinking",
+            status=SessionStatus.WAITING_ANSWER,
+            last_event_at=utcnow() - timedelta(seconds=30),
+            transcript_path=str(transcript),
+        )
+        mgr.save_session(state)
+
+        sessions = mgr.load_all_sessions()
+        corrected = correct_stale_waiting(mgr, sessions)
+        assert corrected == 0
+        assert mgr.load_session("user-thinking").status == SessionStatus.WAITING_ANSWER

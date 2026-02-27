@@ -11,7 +11,7 @@ from flaude.config import load_config, save_config, migrate_notifications_config
 from flaude.constants import DEFAULT_THEME, TUI_REFRESH_INTERVAL, utcnow
 from flaude.state.manager import StateManager
 from flaude.state.models import SessionState, SessionStatus, WAITING_STATUSES
-from flaude.state.cleanup import cleanup_stale_sessions
+from flaude.state.cleanup import cleanup_stale_sessions, correct_stale_waiting
 from flaude.state.scanner import scan_preexisting_sessions
 from flaude.terminal.detect import detect_terminal
 from flaude.terminal.launch import launch_session
@@ -104,6 +104,7 @@ class FlaudeApp(App):
         active = {
             sid: s for sid, s in sessions.items() if s.status != SessionStatus.ENDED
         }
+        correct_stale_waiting(self._mgr, active)
         self._active = active
 
         table = self.query_one(SessionTable)

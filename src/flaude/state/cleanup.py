@@ -1,11 +1,13 @@
 """Stale session detection and orphan cleanup."""
 
+import calendar
+import os
 import subprocess
 from datetime import timedelta
 
 from flaude.constants import STALE_SESSION_TIMEOUT, utcnow
 from flaude.state.manager import StateManager
-from flaude.state.models import SessionStatus
+from flaude.state.models import SessionState, SessionStatus, WAITING_STATUSES
 
 # Sessions inactive for this many seconds get a process check
 _PROCESS_CHECK_THRESHOLD = 30
@@ -62,3 +64,43 @@ def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
                 continue
 
     return cleaned
+
+
+# Minimum age (seconds) before we check transcript for staleness
+_WAITING_MIN_AGE = 5
+# Transcript must be modified at least this many seconds after last_event_at
+_TRANSCRIPT_BUFFER = 2
+
+
+def correct_stale_waiting(mgr: StateManager, sessions: dict[str, SessionState]) -> int:
+    """Fix waiting states that weren't cleared by hooks.
+
+    When a user declines a permission or plan, Claude Code may not fire
+    PostToolUse/Stop events, leaving the session stuck in a waiting state.
+    We detect this by comparing transcript mtime to last_event_at — if the
+    transcript advanced, the session has moved on.
+
+    Returns count of corrected sessions.
+    """
+    now = utcnow()
+    corrected = 0
+    for state in sessions.values():
+        if state.status not in WAITING_STATUSES:
+            continue
+        if not state.transcript_path:
+            continue
+        age = (now - state.last_event_at).total_seconds()
+        if age < _WAITING_MIN_AGE:
+            continue
+        try:
+            mtime = os.path.getmtime(state.transcript_path)
+        except OSError:
+            continue
+        event_ts = calendar.timegm(state.last_event_at.timetuple())
+        if mtime > event_ts + _TRANSCRIPT_BUFFER:
+            state.status = SessionStatus.WORKING
+            state.last_event = "StaleWaitingCorrected"
+            state.last_event_at = now
+            mgr.save_session(state)
+            corrected += 1
+    return corrected
