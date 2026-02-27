@@ -10,7 +10,7 @@ from textual.widgets import Header, Footer, DataTable
 from flaude.config import load_config, save_config, migrate_notifications_config
 from flaude.constants import DEFAULT_THEME, TUI_REFRESH_INTERVAL, utcnow
 from flaude.state.manager import StateManager
-from flaude.state.models import SessionStatus, WAITING_STATUSES
+from flaude.state.models import SessionState, SessionStatus, WAITING_STATUSES
 from flaude.state.cleanup import cleanup_stale_sessions
 from flaude.state.scanner import scan_preexisting_sessions
 from flaude.terminal.detect import detect_terminal
@@ -54,6 +54,8 @@ class FlaudeApp(App):
         save_config(self._config)
         self.theme = self._config.get("theme", DEFAULT_THEME)
         self._notifier = NotificationManager(bell=self.bell)
+        self._active: dict[str, SessionState] = {}
+        self._selected_id: str | None = None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -71,9 +73,11 @@ class FlaudeApp(App):
     def on_mount(self) -> None:
         scan_preexisting_sessions(self._mgr)
         self._sync_notifier()
-        self.set_interval(TUI_REFRESH_INTERVAL, self._refresh_state)
+        self.set_interval(TUI_REFRESH_INTERVAL, self._refresh_sessions)
+        self.set_interval(TUI_REFRESH_INTERVAL * 2, self._refresh_log)
         self.set_interval(30.0, self._schedule_cleanup)
-        self._refresh_state()
+        self._refresh_sessions()
+        self._refresh_log()
         self.run_worker(self._check_for_update, thread=True)
 
     def _check_for_update(self) -> None:
@@ -94,32 +98,18 @@ class FlaudeApp(App):
         self._config["theme"] = theme
         save_config(self._config)
 
-    def _refresh_state(self) -> None:
+    def _refresh_sessions(self) -> None:
+        """Fast path: state files → table + permission panel + title."""
         sessions = self._mgr.load_all_sessions()
         active = {
             sid: s for sid, s in sessions.items() if s.status != SessionStatus.ENDED
         }
+        self._active = active
+
         table = self.query_one(SessionTable)
         table.update_sessions(active)
         self.query_one(PermissionPanel).update_permissions(active)
-
-        selected_id = table.get_selected_session_id()
-
-        # Update detail panel
-        detail = self.query_one(SessionDetail)
-        if selected_id and selected_id in active:
-            detail.update_session(active[selected_id])
-        else:
-            detail.update_session(None)
-
-        log = self.query_one(ActivityLog)
-        log.set_session_filter(selected_id)
-        # Pass transcript path for the selected session
-        if selected_id and selected_id in active:
-            log.set_transcript_path(active[selected_id].transcript_path)
-        else:
-            log.set_transcript_path(None)
-        log.refresh_log()
+        self._selected_id = table.get_selected_session_id()
 
         waiting = sum(1 for s in active.values() if s.status in WAITING_STATUSES)
         notif = self._config.get("notifications", {})
@@ -132,6 +122,25 @@ class FlaudeApp(App):
             self.title = f"Flaude ({len(active)} sessions) {notif_icon}"
 
         self._notifier.check(active, notif)
+
+    def _refresh_log(self) -> None:
+        """Slow path: session detail + activity log."""
+        active = self._active
+        selected_id = self._selected_id
+
+        detail = self.query_one(SessionDetail)
+        if selected_id and selected_id in active:
+            detail.update_session(active[selected_id])
+        else:
+            detail.update_session(None)
+
+        log = self.query_one(ActivityLog)
+        log.set_session_filter(selected_id)
+        if selected_id and selected_id in active:
+            log.set_transcript_path(active[selected_id].transcript_path)
+        else:
+            log.set_transcript_path(None)
+        log.refresh_log()
 
     def _schedule_cleanup(self) -> None:
         self.run_worker(self._cleanup, thread=True)
