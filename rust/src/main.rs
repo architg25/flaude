@@ -732,7 +732,13 @@ fn handle_session_end(event: &serde_json::Value) {
 fn handle_permission_request(event: &serde_json::Value) {
     let tool_name = get_str(event, "tool_name");
     let mut state = load_or_create(event);
-    state.status = SessionStatus::WaitingPermission;
+    // Don't overwrite WAITING_ANSWER (AskUserQuestion) or PLAN (ExitPlanMode)
+    if !matches!(
+        state.status,
+        SessionStatus::WaitingAnswer | SessionStatus::Plan
+    ) {
+        state.status = SessionStatus::WaitingPermission;
+    }
     state.last_event = "PermissionRequest".into();
     state.last_event_at = utcnow();
     save_session(&state);

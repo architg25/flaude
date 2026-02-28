@@ -331,7 +331,9 @@ def _handle_session_end(event: dict, sm: StateManager) -> None:
 def _handle_permission_request(event: dict, sm: StateManager) -> None:
     tool_name = event.get("tool_name", "")
     state = _load_or_create(event, sm)
-    state.status = SessionStatus.WAITING_PERMISSION
+    # Don't overwrite WAITING_ANSWER (AskUserQuestion) or PLAN (ExitPlanMode)
+    if state.status not in (SessionStatus.WAITING_ANSWER, SessionStatus.PLAN):
+        state.status = SessionStatus.WAITING_PERMISSION
     state.last_event = "PermissionRequest"
     state.last_event_at = utcnow()
     sm.save_session(state)
