@@ -10,7 +10,6 @@ from pathlib import Path
 
 from helpers import make_state
 from flaude.hooks.dispatcher import (
-    _handle_notification,
     _handle_post_tool_use,
     _handle_pre_tool_use,
     _handle_session_end,

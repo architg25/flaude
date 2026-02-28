@@ -295,21 +295,6 @@ def _handle_stop(event: dict, sm: StateManager) -> None:
     _log(state.session_id, "Stop", "idle")
 
 
-def _handle_notification(event: dict, sm: StateManager) -> None:
-    message = event.get("message", "").lower()
-    state = _load_or_create(event, sm)
-
-    if "permission" in message:
-        state.status = SessionStatus.WAITING_PERMISSION
-    elif "needs your attention" in message and state.status != SessionStatus.PLAN:
-        state.status = SessionStatus.WAITING_ANSWER
-
-    state.last_event = "Notification"
-    state.last_event_at = utcnow()
-    sm.save_session(state)
-    _log(state.session_id, "Notification", trunc(message, 60))
-
-
 def _handle_user_prompt_submit(event: dict, sm: StateManager) -> None:
     state = _load_or_create(event, sm)
     prompt = event.get("user_prompt", "")
@@ -343,6 +328,16 @@ def _handle_session_end(event: dict, sm: StateManager) -> None:
     _log(session_id, "SessionEnd")
 
 
+def _handle_permission_request(event: dict, sm: StateManager) -> None:
+    tool_name = event.get("tool_name", "")
+    state = _load_or_create(event, sm)
+    state.status = SessionStatus.WAITING_PERMISSION
+    state.last_event = "PermissionRequest"
+    state.last_event_at = utcnow()
+    sm.save_session(state)
+    _log(state.session_id, "PermissionRequest", tool_name)
+
+
 # ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
@@ -352,11 +347,11 @@ _HANDLERS: dict[str, Callable[[dict, StateManager], None]] = {
     "PreToolUse": _handle_pre_tool_use,
     "PostToolUse": _handle_post_tool_use,
     "Stop": _handle_stop,
-    "Notification": _handle_notification,
     "UserPromptSubmit": _handle_user_prompt_submit,
     "SubagentStop": _handle_subagent_stop,
     "PreCompact": _handle_pre_compact,
     "SessionEnd": _handle_session_end,
+    "PermissionRequest": _handle_permission_request,
 }
 
 

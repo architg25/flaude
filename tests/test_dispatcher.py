@@ -10,7 +10,7 @@ from helpers import make_state
 from flaude.hooks.dispatcher import (
     _detect_terminal_from_env,
     _get_usage_from_transcript,
-    _handle_notification,
+    _handle_permission_request,
     _handle_post_tool_use,
     _handle_pre_tool_use,
     _handle_session_end,
@@ -379,36 +379,22 @@ class TestHandleStop:
         assert state.turn_started_at is None
 
 
-class TestHandleNotification:
-    def test_permission_notification(self, mgr):
-        state = make_state("s7")
+class TestHandlePermissionRequest:
+    def test_sets_waiting_permission(self, mgr):
+        state = make_state("s7b", status=SessionStatus.WORKING)
         mgr.save_session(state)
 
-        _handle_notification(
+        _handle_permission_request(
             {
-                "session_id": "s7",
+                "session_id": "s7b",
                 "cwd": "/tmp",
-                "message": "Tool requires permission approval",
+                "tool_name": "Bash",
             },
             mgr,
         )
-        state = mgr.load_session("s7")
+        state = mgr.load_session("s7b")
         assert state.status == SessionStatus.WAITING_PERMISSION
-
-    def test_attention_notification(self, mgr):
-        state = make_state("s8")
-        mgr.save_session(state)
-
-        _handle_notification(
-            {
-                "session_id": "s8",
-                "cwd": "/tmp",
-                "message": "Claude needs your attention",
-            },
-            mgr,
-        )
-        state = mgr.load_session("s8")
-        assert state.status == SessionStatus.WAITING_ANSWER
+        assert state.last_event == "PermissionRequest"
 
 
 class TestHandleUserPromptSubmit:

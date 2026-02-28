@@ -682,21 +682,6 @@ fn handle_stop(event: &serde_json::Value) {
     log_activity(&state.session_id, "Stop", "idle");
 }
 
-fn handle_notification(event: &serde_json::Value) {
-    let message = get_str(event, "message").to_lowercase();
-    let mut state = load_or_create(event);
-
-    if message.contains("permission") {
-        state.status = SessionStatus::WaitingPermission;
-    } else if message.contains("needs your attention") && state.status != SessionStatus::Plan {
-        state.status = SessionStatus::WaitingAnswer;
-    }
-
-    state.last_event = "Notification".into();
-    state.last_event_at = utcnow();
-    save_session(&state);
-    log_activity(&state.session_id, "Notification", &trunc(&message, 60));
-}
 
 fn handle_user_prompt_submit(event: &serde_json::Value) {
     let mut state = load_or_create(event);
@@ -744,6 +729,16 @@ fn handle_session_end(event: &serde_json::Value) {
     log_activity(&session_id, "SessionEnd", "");
 }
 
+fn handle_permission_request(event: &serde_json::Value) {
+    let tool_name = get_str(event, "tool_name");
+    let mut state = load_or_create(event);
+    state.status = SessionStatus::WaitingPermission;
+    state.last_event = "PermissionRequest".into();
+    state.last_event_at = utcnow();
+    save_session(&state);
+    log_activity(&state.session_id, "PermissionRequest", &tool_name);
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -769,11 +764,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "PreToolUse" => handle_pre_tool_use(&event),
         "PostToolUse" => handle_post_tool_use(&event),
         "Stop" => handle_stop(&event),
-        "Notification" => handle_notification(&event),
         "UserPromptSubmit" => handle_user_prompt_submit(&event),
         "SubagentStop" => handle_subagent_stop(&event),
         "PreCompact" => handle_pre_compact(&event),
         "SessionEnd" => handle_session_end(&event),
+        "PermissionRequest" => handle_permission_request(&event),
         _ => {} // Unknown events silently ignored
     }
 

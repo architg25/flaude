@@ -38,7 +38,7 @@ TUI_REFRESH_INTERVAL = float(os.environ.get("FLAUDE_TUI_REFRESH_INTERVAL", "1.0"
 TERMINAL_OVERRIDE = os.environ.get("FLAUDE_TERMINAL")
 
 # All hooks are non-blocking (monitor only), so a short timeout is fine
-HOOK_TIMEOUT_DEFAULT = 10
+HOOK_TIMEOUT_DEFAULT = 3
 
 # Identifier used to detect flaude hooks in settings.json.
 # Try native Rust binary first, fall back to Python dispatcher.

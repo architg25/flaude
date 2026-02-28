@@ -35,8 +35,8 @@ HOOK_EVENTS = [
     "Stop",
     "SubagentStop",
     "PreCompact",
-    "Notification",
     "UserPromptSubmit",
+    "PermissionRequest",
 ]
 
 
