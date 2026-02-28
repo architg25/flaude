@@ -26,6 +26,10 @@ The hook dispatcher ships as a native Rust binary for fast invocation (~14ms vs 
 - **Theme customization** -- all colors adapt to the selected Textual theme, with persistence across restarts
 - **Ghost session cleanup** -- sessions inactive for 30s get a process check, 30min hard timeout. This only removes the session from Flaude's dashboard, not the actual Claude session — it reappears automatically on next activity. Configurable via `FLAUDE_STALE_SESSION_TIMEOUT`
 
+### Terminal support
+
+**iTerm2 is strongly recommended.** It's the only terminal that exposes tab-level APIs, which flaude uses for precise session navigation — jump directly to the tab running a specific Claude session. Other terminals (Ghostty, Terminal.app, Warp, IntelliJ) are limited to bringing the app to the foreground; flaude can't switch to a specific tab within them.
+
 ### Install
 
 Requires **Python 3.11+** and **macOS** (terminal navigation uses AppleScript).
@@ -85,6 +89,12 @@ Hook events (stdin JSON)
         ├─▶ permission_panel.py  ← Waiting sessions with question details
         └─▶ activity_log.py     ← Transcript viewer (All/Summary/Tools modes)
 ```
+
+### Permission detection
+
+Permission-waiting state is detected via Claude Code's `PermissionRequest` hook. Claude Code short-circuits the hook chain: if an earlier hook (e.g., a user's auto-approve hook) returns an allow/deny decision, subsequent hooks don't fire. Since flaude's handler is registered last (via `append()` in `flaude init`), it only runs when the tool actually goes to "ask" — no false positives.
+
+**Ordering matters**: `flaude-hook` must be the LAST entry in the `PermissionRequest` hooks array. `flaude init` ensures this by appending. If you add custom `PermissionRequest` hooks, place them before flaude's entry.
 
 ### Requirements
 

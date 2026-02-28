@@ -40,12 +40,6 @@ Do NOT bump the version for documentation-only changes (README, docs/, CLAUDE.md
 
 The hook dispatcher exists in two implementations: Python (`src/flaude/hooks/dispatcher.py`) and Rust (`rust/src/main.rs`). When changing one, always check if the same change applies to the other.
 
-## Permission Detection
-
-Permission-waiting state is detected via the `PermissionRequest` hook. Claude Code short-circuits the hook chain: if an earlier hook (e.g., a user's auto-approve hook) returns an allow/deny decision, subsequent hooks don't fire. So flaude's handler — registered last via `append()` in `cmd_init` — only runs when the tool actually goes to "ask", making it safe to set WAITING_PERMISSION immediately with no false positives.
-
-**Ordering matters**: flaude-hook must be the LAST entry in the `PermissionRequest` hooks array. `flaude init` ensures this by appending. Users adding custom PermissionRequest hooks should place them before flaude's entry.
-
 ## Running Tests
 
 ```
