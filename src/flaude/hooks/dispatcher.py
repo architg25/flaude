@@ -274,10 +274,6 @@ def _handle_post_tool_use(event: dict, sm: StateManager) -> None:
         SessionStatus.WAITING_PERMISSION,
     ):
         state.status = SessionStatus.WORKING
-    tokens, model = _get_usage_from_transcript(state.transcript_path)
-    state.context_tokens = tokens
-    if model:
-        state.model = model
     sm.save_session(state)
     _log(state.session_id, "PostToolUse", tool_name)
 
@@ -291,6 +287,10 @@ def _handle_stop(event: dict, sm: StateManager) -> None:
     state.turn_started_at = None
     state.last_event = "Stop"
     state.last_event_at = utcnow()
+    tokens, model = _get_usage_from_transcript(state.transcript_path)
+    state.context_tokens = tokens
+    if model:
+        state.model = model
     sm.save_session(state)
     _log(state.session_id, "Stop", "idle")
 

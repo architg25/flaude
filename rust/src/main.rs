@@ -655,12 +655,6 @@ fn handle_post_tool_use(event: &serde_json::Value) {
         state.status = SessionStatus::Working;
     }
 
-    let (tokens, model) = get_usage_from_transcript(state.transcript_path.as_deref());
-    state.context_tokens = tokens;
-    if let Some(m) = model {
-        state.model = Some(m);
-    }
-
     save_session(&state);
     log_activity(&state.session_id, "PostToolUse", &tool_name);
 }
@@ -677,6 +671,12 @@ fn handle_stop(event: &serde_json::Value) {
     state.turn_started_at = None;
     state.last_event = "Stop".into();
     state.last_event_at = utcnow();
+
+    let (tokens, model) = get_usage_from_transcript(state.transcript_path.as_deref());
+    state.context_tokens = tokens;
+    if let Some(m) = model {
+        state.model = Some(m);
+    }
 
     save_session(&state);
     log_activity(&state.session_id, "Stop", "idle");
