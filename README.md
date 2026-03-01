@@ -56,6 +56,7 @@ flaude init             # Install hooks into Claude Code
 flaude init --dry-run   # Preview hook installation
 flaude uninstall        # Remove hooks from Claude Code
 flaude uninstall --purge # Remove config, state, and pip uninstall
+flaude update           # Self-update to latest version
 ```
 
 ### Key bindings
@@ -64,6 +65,7 @@ flaude uninstall --purge # Remove config, state, and pip uninstall
 | ----------- | ----------------------------------------------- |
 | `Enter`/`g` | Navigate to the selected session's terminal     |
 | `n`         | Launch a new Claude session (directory picker)  |
+| `p`         | Send a prompt to the selected session (iTerm2)  |
 | `l`         | Cycle activity log mode (All / Summary / Tools) |
 | `s`/`S`     | Toggle notifications / notification settings    |
 | `t`         | Change theme (Textual theme picker with search) |
