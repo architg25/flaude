@@ -20,6 +20,7 @@ The hook dispatcher ships as a native Rust binary for fast invocation (~14ms vs 
 - **Terminal navigation** -- jump to any session's terminal tab/window with a keypress. Full tab-level switching on iTerm2 (via TTY matching). Ghostty does window-level matching (raises the window containing the project name). Terminal.app matches by custom tab title. Warp and IntelliJ are limited to bringing the app to the foreground
 - **Session launcher** -- start new Claude sessions from the dashboard with directory autocomplete
 - **Send prompt** -- type a prompt in flaude and send it to an idle Claude session via iTerm2's AppleScript API. Supports multi-line input (Shift+Enter for new lines, Enter to send). iTerm2 only
+- **Exit session** -- send `/exit` to an idle Claude session from the dashboard. Uses the same iTerm2 AppleScript injection as prompt sending, with a confirmation dialog. iTerm2 only
 - **Notification system** -- two categories: long turn completion (alert when a turn finishes after N minutes) and waiting on input (alert when a session needs permission, an answer, or plan review). Supports terminal bell, macOS notifications, and system sounds. Off by default, toggle with `s`, configure with `S`. Title bar shows 🔔/🔕 indicator. Note: Claude Code's built-in notifications have a [known delay bug](https://github.com/anthropics/claude-code/issues/5186) — flaude's hook-based notifications fire immediately when the event occurs, no delay
 - **Activity log** -- tail session transcripts in real time with three verbosity modes (All / Summary / Tools)
 - **Session detail panel** -- sectioned view with session info, status, timing, context ratio, last prompt, and pending questions with plan approval details
@@ -67,6 +68,7 @@ flaude update           # Self-update to latest version
 | `Enter`/`g` | Navigate to the selected session's terminal     |
 | `n`         | Launch a new Claude session (directory picker)  |
 | `p`         | Send a prompt to the selected session (iTerm2)  |
+| `d`         | Exit the selected session (iTerm2)              |
 | `l`         | Cycle activity log mode (All / Summary / Tools) |
 | `s`/`S`     | Toggle notifications / notification settings    |
 | `t`         | Change theme (Textual theme picker with search) |

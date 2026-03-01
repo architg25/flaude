@@ -34,6 +34,12 @@ Context token limits are model-aware: 1M for Opus, 200K for Sonnet and Haiku. Co
 
 Pressing `n` opens a directory picker with tab-completion and arrow-key navigation for suggestions. Defaults to the selected session's working directory. Opens a new terminal tab and runs `claude` in the chosen directory.
 
+### Exit session
+
+Pressing `d` sends `/exit` to the selected session's iTerm2 terminal, cleanly exiting Claude Code. Uses the same AppleScript injection mechanism as prompt sending (`send_text_to_session`). A confirmation dialog (y/n/Esc) is shown before sending.
+
+Same requirements as prompt sending: session must be IDLE or NEW, iTerm2 terminal, and have a known tty. Other terminals lack a per-session API to target a specific tab by TTY — sending keystrokes to the frontmost window risks hitting the wrong session.
+
 ### Notification system
 
 Flaude has two notification categories, both **off by default**. Toggle with `s`, configure with `S`.
@@ -80,13 +86,13 @@ Body text shows the pending question when available.
 
 Navigation (switching to the correct tab/window) and session launching:
 
-| Terminal     | Tab switch | New tab | Bring to front | Detection              |
-| ------------ | ---------- | ------- | -------------- | ---------------------- |
-| iTerm2       | Yes        | Yes     | Yes            | tty-to-cwd match       |
-| Ghostty      | Window     | Yes     | Yes            | Window title match     |
-| Terminal.app | Yes        | Yes     | Yes            | Custom tab title match |
-| Warp         | No         | Yes     | Yes            | Brings app to front    |
-| IntelliJ     | No         | No      | Yes            | Detects running IDE    |
+| Terminal     | Tab switch | New tab | Bring to front | Send prompt/exit | Detection              |
+| ------------ | ---------- | ------- | -------------- | ---------------- | ---------------------- |
+| iTerm2       | Yes        | Yes     | Yes            | Yes              | tty-to-cwd match       |
+| Ghostty      | Window     | Yes     | Yes            | No               | Window title match     |
+| Terminal.app | Yes        | Yes     | Yes            | No               | Custom tab title match |
+| Warp         | No         | Yes     | Yes            | No               | Brings app to front    |
+| IntelliJ     | No         | No      | Yes            | No               | Detects running IDE    |
 
 Terminal detection happens two ways: per-session via `TERM_PROGRAM` / `TERMINAL_EMULATOR` env vars (set by each session's hook), and as a dashboard fallback via AppleScript process detection.
 
