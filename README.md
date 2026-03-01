@@ -17,7 +17,7 @@ The hook dispatcher ships as a native Rust binary for fast invocation (~14ms vs 
 ### Features
 
 - **Live session dashboard** -- theme-aware status colors, context usage, uptime, and model info for all running sessions
-- **Terminal navigation** -- jump to any session's terminal tab/window with a keypress. Full tab-level switching on iTerm2 (via TTY matching). Ghostty, Terminal.app, Warp, and IntelliJ are limited to bringing the app to the foreground — these terminals don't expose tab-switching APIs
+- **Terminal navigation** -- jump to any session's terminal tab/window with a keypress. Full tab-level switching on iTerm2 (via TTY matching). Ghostty does window-level matching (raises the window containing the project name). Terminal.app matches by custom tab title. Warp and IntelliJ are limited to bringing the app to the foreground
 - **Session launcher** -- start new Claude sessions from the dashboard with directory autocomplete
 - **Send prompt** -- type a prompt in flaude and send it to an idle Claude session via iTerm2's AppleScript API. Supports multi-line input (Shift+Enter for new lines, Enter to send). iTerm2 only
 - **Notification system** -- two categories: long turn completion (alert when a turn finishes after N minutes) and waiting on input (alert when a session needs permission, an answer, or plan review). Supports terminal bell, macOS notifications, and system sounds. Off by default, toggle with `s`, configure with `S`. Title bar shows 🔔/🔕 indicator. Note: Claude Code's built-in notifications have a [known delay bug](https://github.com/anthropics/claude-code/issues/5186) — flaude's hook-based notifications fire immediately when the event occurs, no delay
@@ -25,7 +25,7 @@ The hook dispatcher ships as a native Rust binary for fast invocation (~14ms vs 
 - **Session detail panel** -- sectioned view with session info, status, timing, context ratio, last prompt, and pending questions with plan approval details
 - **Monitor-only hooks** -- never blocks Claude Code; users approve permissions in their own terminal as usual
 - **Theme customization** -- all colors adapt to the selected Textual theme, with persistence across restarts
-- **Ghost session cleanup** -- sessions inactive for 30s get a process check, 30min hard timeout. This only removes the session from Flaude's dashboard, not the actual Claude session — it reappears automatically on next activity. Configurable via `FLAUDE_STALE_SESSION_TIMEOUT`
+- **Ghost session cleanup** -- sessions inactive for 30s get a process check, 8-hour hard timeout. Idle sessions are soft-hidden from the dashboard after 30 minutes (configurable in settings) but not deleted. Cleanup only removes the session file from Flaude's dashboard, not the actual Claude session — it reappears automatically on next activity. Configurable via `FLAUDE_STALE_SESSION_TIMEOUT`
 
 ### Terminal support
 
@@ -70,6 +70,7 @@ flaude update           # Self-update to latest version
 | `l`         | Cycle activity log mode (All / Summary / Tools) |
 | `s`/`S`     | Toggle notifications / notification settings    |
 | `t`         | Change theme (Textual theme picker with search) |
+| `h`         | Toggle display of hidden/stale sessions         |
 | `?`         | Help dialog                                     |
 | `q`         | Quit                                            |
 

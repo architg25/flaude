@@ -95,7 +95,8 @@ Terminal detection happens two ways: per-session via `TERM_PROGRAM` / `TERMINAL_
 Sessions that stop reporting are cleaned up automatically:
 
 - **30 seconds inactive** -- checks if a `claude` or `node` process still has the session's cwd (via `lsof`). If not, the session file is deleted.
-- **30 minutes inactive** -- hard timeout, session file deleted regardless of process state.
+- **30 minutes inactive** -- soft-hidden from the dashboard UI (configurable via settings or `FLAUDE_SOFT_HIDE_TIMEOUT`). The session file is NOT deleted; press `h` to toggle hidden sessions.
+- **8 hours inactive** -- hard timeout, session file deleted regardless of process state. Configurable via `FLAUDE_STALE_SESSION_TIMEOUT`.
 
 ## Hook dispatcher
 
@@ -158,8 +159,9 @@ flaude uninstall --purge  # Also remove config, state dir, env var hints, and pi
 | ------------------------------ | ------------------------------ | ----------------------------------------------- |
 | `FLAUDE_STATE_DIR`             | `/tmp/flaude`                  | Root directory for state files                  |
 | `FLAUDE_CONFIG_PATH`           | `~/.config/flaude/config.yaml` | Path to config YAML                             |
-| `FLAUDE_STALE_SESSION_TIMEOUT` | `1800`                         | Seconds before a silent session is hard-removed |
+| `FLAUDE_STALE_SESSION_TIMEOUT` | `28800`                        | Seconds before a silent session is hard-removed |
 | `FLAUDE_TUI_REFRESH_INTERVAL`  | `1.0`                          | Dashboard poll interval in seconds              |
 | `FLAUDE_TERMINAL`              | (auto-detect)                  | Override terminal detection                     |
+| `FLAUDE_SOFT_HIDE_TIMEOUT`     | (config's soft_hide_minutes)   | Seconds before idle sessions are hidden from UI |
 
 Both the Rust and Python dispatchers respect `FLAUDE_STATE_DIR`.
