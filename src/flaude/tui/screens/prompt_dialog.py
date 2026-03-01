@@ -21,6 +21,9 @@ class PromptTextArea(TextArea):
             super().__init__()
             self.text = text
 
+    class TogglePlanMode(Message):
+        pass
+
     async def _on_key(self, event: events.Key) -> None:
         if event.key == "enter":
             event.stop()
@@ -32,6 +35,11 @@ class PromptTextArea(TextArea):
             event.prevent_default()
             start, end = self.selection
             self._replace_via_keyboard("\n", start, end)
+            return
+        if event.key == "shift+tab":
+            event.stop()
+            event.prevent_default()
+            self.post_message(self.TogglePlanMode())
             return
         await super()._on_key(event)
 
@@ -68,24 +76,43 @@ class PromptDialog(ModalScreen[str | None]):
     }
     """
 
+    _HINT_BASE = "[bold]Enter[/] Send  [bold]Shift+Enter[/] New Line  "
+    _HINT_PLAN_OFF = "[bold]⇧Tab[/] Plan Mode"
+    _HINT_PLAN_ON = "[bold]⇧Tab[/] [green]Plan Mode ✓[/]"
+    _HINT_TAIL = "  [bold]Esc[/] Cancel"
+
     def __init__(self, label: str) -> None:
         super().__init__()
         self._label = label
+        self._plan_mode = False
 
     def compose(self) -> ComposeResult:
         with Vertical(id="prompt-dialog"):
             yield Static(self._label, id="prompt-label")
             yield PromptTextArea(id="prompt-field")
-            yield Static(
-                "[bold]Enter[/] Send  [bold]Shift+Enter[/] New Line  [bold]Esc[/] Cancel",
-                id="prompt-hint",
-            )
+            yield Static(self._hint_text(), id="prompt-hint")
+
+    def _hint_text(self) -> str:
+        plan = self._HINT_PLAN_ON if self._plan_mode else self._HINT_PLAN_OFF
+        return self._HINT_BASE + plan + self._HINT_TAIL
+
+    def _refresh_hint(self) -> None:
+        self.query_one("#prompt-hint", Static).update(self._hint_text())
 
     def on_mount(self) -> None:
         self.query_one("#prompt-field").focus()
 
+    def on_prompt_text_area_toggle_plan_mode(
+        self, event: PromptTextArea.TogglePlanMode
+    ) -> None:
+        self._plan_mode = not self._plan_mode
+        self._refresh_hint()
+
     def on_prompt_text_area_submitted(self, event: PromptTextArea.Submitted) -> None:
-        self.dismiss(event.text.strip() or None)
+        text = event.text.strip() or None
+        if text and self._plan_mode:
+            text = f"/plan\n{text}"
+        self.dismiss(text)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
