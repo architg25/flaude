@@ -19,6 +19,7 @@ The hook dispatcher ships as a native Rust binary for fast invocation (~14ms vs 
 - **Live session dashboard** -- theme-aware status colors, context usage, uptime, and model info for all running sessions
 - **Terminal navigation** -- jump to any session's terminal tab/window with a keypress. Full tab-level switching on iTerm2 (via TTY matching). Ghostty, Terminal.app, Warp, and IntelliJ are limited to bringing the app to the foreground — these terminals don't expose tab-switching APIs
 - **Session launcher** -- start new Claude sessions from the dashboard with directory autocomplete
+- **Send prompt** -- type a prompt in flaude and send it to an idle Claude session via iTerm2's AppleScript API. Supports multi-line input (Shift+Enter for new lines, Enter to send). iTerm2 only
 - **Notification system** -- two categories: long turn completion (alert when a turn finishes after N minutes) and waiting on input (alert when a session needs permission, an answer, or plan review). Supports terminal bell, macOS notifications, and system sounds. Off by default, toggle with `s`, configure with `S`. Title bar shows 🔔/🔕 indicator
 - **Activity log** -- tail session transcripts in real time with three verbosity modes (All / Summary / Tools)
 - **Session detail panel** -- sectioned view with session info, status, timing, context ratio, last prompt, and pending questions with plan approval details
