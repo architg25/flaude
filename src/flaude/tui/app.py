@@ -105,7 +105,9 @@ class FlaudeApp(App):
         """Fast path: state files → table + permission panel + title."""
         sessions = self._mgr.load_all_sessions()
         active = {
-            sid: s for sid, s in sessions.items() if s.status != SessionStatus.ENDED
+            sid: s
+            for sid, s in sessions.items()
+            if s.status != SessionStatus.ENDED and s.terminal is not None
         }
         correct_stale_waiting(self._mgr, active)
         self._active = active
