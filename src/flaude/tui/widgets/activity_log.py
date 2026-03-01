@@ -120,6 +120,9 @@ class ActivityLog(RichLog):
         except json.JSONDecodeError:
             return None
 
+        if not isinstance(entry, dict):
+            return None
+
         entry_type = entry.get("type")
         message = entry.get("message", {})
         content = message.get("content", [])
