@@ -127,6 +127,20 @@ class ActivityLog(RichLog):
         if entry_type == "progress":
             return None
 
+        # User messages have content as a plain string, not a list
+        if isinstance(content, str) and message.get("role") == "user":
+            if entry.get("isMeta"):
+                return None
+            text = content.strip()
+            if not text or text.startswith(
+                ("<command-name>", "<local-command-caveat>", "<system-reminder>")
+            ):
+                return None
+            text = " ".join(text.split())
+            max_len = 100 if self._mode == "summary" else 500
+            truncated = text[:max_len] + ("..." if len(text) > max_len else "")
+            return f"[dim]▸ {truncated}[/]"
+
         if not isinstance(content, list):
             return None
 
