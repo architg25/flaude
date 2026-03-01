@@ -75,7 +75,7 @@ class SessionDetail(Static):
         lines.append(_kv("Status", f"[{style}]{info.indicator} {info.label}[/]"))
         if state.model:
             lines.append(_kv("Model", state.model))
-        lines.append(_kv("Mode", state.permission_mode))
+        lines.append(_kv("Mode", state.permission_mode or "default"))
         lines.append(_kv("Term", state.terminal or "?"))
 
         # ── Timing ──
