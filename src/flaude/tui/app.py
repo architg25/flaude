@@ -23,6 +23,7 @@ from flaude.terminal.launch import launch_session
 from flaude.terminal.inject import send_text_to_session
 from flaude.terminal.navigate import navigate_to_session
 from flaude.tui.notifications import NotificationManager
+from flaude.tui.screens.confirm_dialog import ConfirmDialog
 from flaude.tui.screens.input_dialog import InputDialog
 from flaude.tui.screens.prompt_dialog import PromptDialog
 from flaude.tui.screens.help_dialog import HelpDialog
@@ -44,6 +45,7 @@ class FlaudeApp(App):
         Binding("g", "goto_session", "Go to Session"),
         Binding("n", "new_session", "New Claude Session"),
         Binding("p", "send_prompt", "Send Prompt"),
+        Binding("d", "exit_session", "Exit Session"),
         Binding("l", "cycle_log_mode", "Log Mode"),
         Binding(
             "s", "toggle_notifications", "Notif Toggle/Settings", key_display="s/S"
@@ -268,6 +270,46 @@ class FlaudeApp(App):
                 self.notify("Failed to send prompt", severity="error")
 
         self.push_screen(PromptDialog(f"Prompt ({project}):"), on_result)
+
+    def action_exit_session(self) -> None:
+        table = self.query_one(SessionTable)
+        session_id = table.get_selected_session_id()
+        if not session_id:
+            self.notify("No session selected", severity="warning")
+            return
+
+        state = self._mgr.load_session(session_id)
+        if not state:
+            self.notify("Session not found", severity="error")
+            return
+
+        if state.status not in (SessionStatus.IDLE, SessionStatus.NEW):
+            self.notify("Session is busy", severity="warning")
+            return
+
+        if state.terminal != "iTerm2":
+            self.notify("Only iTerm2 supported", severity="warning")
+            return
+
+        if not state.tty:
+            self.notify("No tty for session", severity="warning")
+            return
+
+        project = state.cwd.rsplit("/", 1)[-1] if state.cwd else session_id[:8]
+        tty = state.tty
+
+        def on_result(confirmed: bool) -> None:
+            if not confirmed:
+                return
+            if send_text_to_session(tty, "/exit"):
+                self.notify(f"Exiting {project}")
+            else:
+                self.notify("Failed to send /exit", severity="error")
+
+        self.push_screen(
+            ConfirmDialog(f"Exit session [bold]{project}[/] ({session_id[:8]})?"),
+            on_result,
+        )
 
     def action_toggle_hidden(self) -> None:
         self._show_hidden = not self._show_hidden
