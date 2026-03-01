@@ -45,6 +45,8 @@ def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
 
     for sid, state in sessions.items():
         if state.status == SessionStatus.ENDED:
+            mgr.delete_session(sid)
+            cleaned += 1
             continue
 
         # Hard timeout: session hasn't reported anything in a long time

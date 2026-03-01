@@ -60,13 +60,14 @@ class TestCleanupStaleSessions:
         assert cleaned == 0
         assert mgr.load_session("fresh") is not None
 
-    def test_ended_sessions_skipped(self, mgr, monkeypatch):
-        """Sessions with ENDED status are not cleaned up."""
+    def test_ended_sessions_deleted(self, mgr, monkeypatch):
+        """Sessions with ENDED status are cleaned up regardless of age."""
         monkeypatch.setattr("flaude.state.cleanup.STALE_SESSION_TIMEOUT", 1800)
         _stale_state("ended", mgr, age_seconds=5000, status=SessionStatus.ENDED)
 
         cleaned = cleanup_stale_sessions(mgr)
-        assert cleaned == 0
+        assert cleaned == 1
+        assert mgr.load_session("ended") is None
 
     def test_empty_returns_zero(self, mgr):
         assert cleanup_stale_sessions(mgr) == 0
