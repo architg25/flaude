@@ -37,27 +37,14 @@ The Project column shows the cwd basename, which for monorepos is the repo root 
 - Or detect the git root and show `repo/subdir` when the session's cwd is deeper than the repo root
 - Detail panel should show both the repo name and the sub-path for clarity
 
-## Kill session from dashboard (d key)
+## ~~Kill session from dashboard (d key)~~ — DONE
 
-Need a reliable way to terminate a Claude Code session from the flaude TUI.
+Sends `/exit` to the session's iTerm2 terminal via AppleScript (same mechanism as prompt sending).
 
-**Problem:** Claude Code doesn't expose a CLI command to stop a session by ID. Process matching is unreliable because:
-
-- `pkill -f` only works for `--resume` sessions (session ID is in args)
-- Fresh sessions started with just `claude` don't have the session ID in their command line
-- `lsof` cwd matching is noisy — hundreds of `node` processes share generic cwds
-
-**Possible approaches:**
-
-- Wait for Claude Code to add a `claude stop <session-id>` CLI command
-- Use the Stop hook to write a "please exit" signal file that a custom Stop hook reads
-- Send SIGTERM to the specific tty's foreground process group (needs tty tracking in session state)
-
-**UI already built (removed, can be restored):**
-
-- `d` keybind on session table
-- Confirmation dialog with session details (project, ID, terminal, status, age, tools)
-- `ConfirmScreen` modal (y/n/Esc)
+- `d` keybind → confirmation dialog → `send_text_to_session(tty, "/exit")`
+- Requires: session is IDLE or NEW, iTerm2, has tty
+- Only works for iTerm2 (has per-session AppleScript API with TTY matching)
+- Ghostty/Warp/Terminal lack a way to target a specific tab by TTY — would need navigate-then-keystroke which risks hitting the wrong tab
 
 ## Permission management from dashboard
 
