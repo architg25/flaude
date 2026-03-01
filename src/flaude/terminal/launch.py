@@ -2,7 +2,7 @@
 
 import subprocess
 
-from flaude.terminal.navigate import _escape_applescript
+from flaude.terminal.navigate import escape_applescript
 
 
 def launch_session(terminal: str | None, cwd: str) -> bool:
@@ -30,7 +30,7 @@ def launch_session(terminal: str | None, cwd: str) -> bool:
 
 
 def _build_launch_script(terminal: str, cwd: str) -> str | None:
-    cmd = _escape_applescript(f"cd {cwd} && claude")
+    cmd = escape_applescript(f"cd {cwd} && claude")
 
     if terminal == "iTerm2":
         return f"""

@@ -51,6 +51,9 @@ class HelpDialog(ModalScreen[None]):
                 "[bold]n[/]             New Claude Session", classes="help-row"
             )
             yield Static(
+                "[bold]p[/]             Send Prompt to Session", classes="help-row"
+            )
+            yield Static(
                 "[bold]s[/]             Toggle Notifications", classes="help-row"
             )
             yield Static(

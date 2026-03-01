@@ -6,7 +6,7 @@ from pathlib import Path
 from flaude.terminal.detect import JETBRAINS_IDES
 
 
-def _escape_applescript(s: str) -> str:
+def escape_applescript(s: str) -> str:
     """Escape a string for safe interpolation into AppleScript string literals."""
     return s.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -164,7 +164,7 @@ def _cwds_match(resolved: str, target: str) -> bool:
 
 
 def _build_script(terminal: str, cwd: str) -> str | None:
-    basename = _escape_applescript(Path(cwd).name)
+    basename = escape_applescript(Path(cwd).name)
 
     if terminal == "Ghostty":
         return f"""
