@@ -1,4 +1,4 @@
-"""Notification settings dialog — two-category layout with manual navigation."""
+"""Consolidated settings panel — session + notification settings."""
 
 from __future__ import annotations
 
@@ -11,45 +11,53 @@ from textual.containers import Vertical, Horizontal
 from textual.screen import ModalScreen
 from textual.widgets import Static, Input
 
+from flaude.constants import STALE_SESSION_TIMEOUT
+
 
 class _RowKind(Enum):
     TOGGLE = auto()
     NUMBER = auto()
-    HEADER = auto()  # non-interactive section divider
+    HEADER = auto()
 
 
 class _SettingRow(NamedTuple):
     kind: _RowKind
     label: str
-    category: str | None = None  # None = top-level key
-    key: str | None = None
+    path: tuple[str, ...] = ()
     default: bool | float = False
+    min_val: float = 0
+    max_val: float = 999
 
 
 # fmt: off
 ROWS: list[_SettingRow] = [
-    _SettingRow(_RowKind.TOGGLE, "Master enable",        None, "enabled", False),
+    _SettingRow(_RowKind.HEADER, "Session"),
+    _SettingRow(_RowKind.NUMBER, "  Hide idle after (min)", ("soft_hide_minutes",), 30, min_val=1, max_val=STALE_SESSION_TIMEOUT // 60),
+
+    _SettingRow(_RowKind.HEADER, "Notifications"),
+    _SettingRow(_RowKind.TOGGLE, "  Master enable",         ("notifications", "enabled"), False),
+
     _SettingRow(_RowKind.HEADER, "Long Turn Completion"),
-    _SettingRow(_RowKind.TOGGLE, "  Enabled",            "long_turn_completion", "enabled", True),
-    _SettingRow(_RowKind.TOGGLE, "  Terminal bell",      "long_turn_completion", "terminal_bell", True),
-    _SettingRow(_RowKind.TOGGLE, "  macOS notification", "long_turn_completion", "macos_alert", False),
-    _SettingRow(_RowKind.TOGGLE, "  System sound",       "long_turn_completion", "system_sound", False),
-    _SettingRow(_RowKind.NUMBER, "  Timer (minutes)",    "long_turn_completion", "long_turn_minutes", 5),
+    _SettingRow(_RowKind.TOGGLE, "  Enabled",               ("notifications", "long_turn_completion", "enabled"), True),
+    _SettingRow(_RowKind.TOGGLE, "  Terminal bell",          ("notifications", "long_turn_completion", "terminal_bell"), True),
+    _SettingRow(_RowKind.TOGGLE, "  macOS notification",     ("notifications", "long_turn_completion", "macos_alert"), False),
+    _SettingRow(_RowKind.TOGGLE, "  System sound",           ("notifications", "long_turn_completion", "system_sound"), False),
+    _SettingRow(_RowKind.NUMBER, "  Timer (minutes)",        ("notifications", "long_turn_completion", "long_turn_minutes"), 5, min_val=0.1),
+
     _SettingRow(_RowKind.HEADER, "Waiting on Input"),
-    _SettingRow(_RowKind.TOGGLE, "  Enabled",            "waiting_on_input", "enabled", False),
-    _SettingRow(_RowKind.TOGGLE, "  Terminal bell",      "waiting_on_input", "terminal_bell", True),
-    _SettingRow(_RowKind.TOGGLE, "  macOS notification", "waiting_on_input", "macos_alert", False),
-    _SettingRow(_RowKind.TOGGLE, "  System sound",       "waiting_on_input", "system_sound", False),
-    _SettingRow(_RowKind.NUMBER, "  Delay (seconds)",    "waiting_on_input", "delay_seconds", 10),
+    _SettingRow(_RowKind.TOGGLE, "  Enabled",               ("notifications", "waiting_on_input", "enabled"), False),
+    _SettingRow(_RowKind.TOGGLE, "  Terminal bell",          ("notifications", "waiting_on_input", "terminal_bell"), True),
+    _SettingRow(_RowKind.TOGGLE, "  macOS notification",     ("notifications", "waiting_on_input", "macos_alert"), False),
+    _SettingRow(_RowKind.TOGGLE, "  System sound",           ("notifications", "waiting_on_input", "system_sound"), False),
+    _SettingRow(_RowKind.NUMBER, "  Delay (seconds)",        ("notifications", "waiting_on_input", "delay_seconds"), 10, min_val=1),
 ]
 # fmt: on
 
-# Pre-compute the indices of interactive (non-HEADER) rows for navigation
 _INTERACTIVE_INDICES = [i for i, r in enumerate(ROWS) if r.kind != _RowKind.HEADER]
 
 
-class NotificationSettings(ModalScreen[dict | None]):
-    """Notification settings with manual Up/Down/Tab/Enter navigation."""
+class SettingsPanel(ModalScreen[dict | None]):
+    """Unified settings panel with manual Up/Down/Tab/Enter navigation."""
 
     BINDINGS = [
         Binding("escape", "cancel", "Cancel"),
@@ -60,7 +68,7 @@ class NotificationSettings(ModalScreen[dict | None]):
     ]
 
     DEFAULT_CSS = """
-    NotificationSettings {
+    SettingsPanel {
         align: center middle;
     }
     #settings-dialog {
@@ -101,7 +109,7 @@ class NotificationSettings(ModalScreen[dict | None]):
         background: $primary 30%;
     }
     .number-label {
-        width: 22;
+        width: 26;
         padding-top: 1;
     }
     .number-input {
@@ -117,11 +125,11 @@ class NotificationSettings(ModalScreen[dict | None]):
     def __init__(self, current: dict) -> None:
         super().__init__()
         self._current = _deep_copy(current)
-        self._nav_pos = 0  # index into _INTERACTIVE_INDICES
+        self._nav_pos = 0
 
     def compose(self) -> ComposeResult:
         with Vertical(id="settings-dialog"):
-            yield Static("Notification Settings", id="settings-title")
+            yield Static("Settings", id="settings-title")
             for i, row in enumerate(ROWS):
                 if row.kind == _RowKind.HEADER:
                     yield Static(
@@ -134,7 +142,7 @@ class NotificationSettings(ModalScreen[dict | None]):
                         yield Static(row.label, classes="number-label")
                         yield Input(
                             value=str(self._get_value(row)),
-                            id=f"input-{row.key}",
+                            id=f"input-{row.path[-1]}",
                             type="number",
                             classes="number-input",
                         )
@@ -181,20 +189,21 @@ class NotificationSettings(ModalScreen[dict | None]):
     # --- Helpers ---
 
     def _get_value(self, row: _SettingRow):
-        if row.category is None:
-            return self._current.get(row.key, row.default)
-        return self._current.get(row.category, {}).get(row.key, row.default)
+        d = self._current
+        for key in row.path[:-1]:
+            d = d.get(key, {})
+        return d.get(row.path[-1], row.default)
 
     def _set_value(self, row: _SettingRow, value) -> None:
-        if row.category is None:
-            self._current[row.key] = value
-        else:
-            self._current.setdefault(row.category, {})[row.key] = value
+        d = self._current
+        for key in row.path[:-1]:
+            d = d.setdefault(key, {})
+        d[row.path[-1]] = value
 
     def _update_focus(self) -> None:
         row = ROWS[_INTERACTIVE_INDICES[self._nav_pos]]
         if row.kind == _RowKind.NUMBER:
-            self.query_one(f"#input-{row.key}", Input).focus()
+            self.query_one(f"#input-{row.path[-1]}", Input).focus()
         else:
             self.set_focus(None)
 
@@ -205,7 +214,7 @@ class NotificationSettings(ModalScreen[dict | None]):
             widget = self.query_one(f"#row-{i}")
 
             if row.kind == _RowKind.HEADER:
-                continue  # headers don't change
+                continue
 
             if row.kind == _RowKind.TOGGLE:
                 val = self._get_value(row)
@@ -219,28 +228,26 @@ class NotificationSettings(ModalScreen[dict | None]):
                 widget.set_class(not is_selected, "number-row")
 
     def _save(self) -> None:
-        # Read numeric inputs and validate
-        try:
-            minutes = float(self.query_one("#input-long_turn_minutes", Input).value)
-        except ValueError:
-            minutes = 5.0
-        try:
-            delay = float(self.query_one("#input-delay_seconds", Input).value)
-        except ValueError:
-            delay = 10.0
-
         result = _deep_copy(self._current)
-        result.setdefault("long_turn_completion", {})["long_turn_minutes"] = max(
-            0.1, minutes
-        )
-        result.setdefault("waiting_on_input", {})["delay_seconds"] = max(1, delay)
+        for row in ROWS:
+            if row.kind != _RowKind.NUMBER:
+                continue
+            try:
+                val = float(self.query_one(f"#input-{row.path[-1]}", Input).value)
+            except ValueError:
+                val = row.default
+            val = max(row.min_val, min(row.max_val, val))
+            d = result
+            for key in row.path[:-1]:
+                d = d.setdefault(key, {})
+            d[row.path[-1]] = val
         self.dismiss(result)
 
 
 def _deep_copy(d: dict) -> dict:
-    """Shallow-ish copy sufficient for our two-level nested config."""
+    """Recursively copy nested dicts (sufficient for our config structure)."""
     out = dict(d)
     for k, v in out.items():
         if isinstance(v, dict):
-            out[k] = dict(v)
+            out[k] = _deep_copy(v)
     return out

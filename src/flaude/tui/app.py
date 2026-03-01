@@ -26,7 +26,7 @@ from flaude.tui.notifications import NotificationManager
 from flaude.tui.screens.input_dialog import InputDialog
 from flaude.tui.screens.prompt_dialog import PromptDialog
 from flaude.tui.screens.help_dialog import HelpDialog
-from flaude.tui.screens.notification_settings import NotificationSettings
+from flaude.tui.screens.settings_panel import SettingsPanel
 from flaude.tui.widgets.session_table import SessionTable
 from flaude.tui.widgets.session_detail import SessionDetail
 from flaude.tui.widgets.permission_panel import PermissionPanel
@@ -48,7 +48,7 @@ class FlaudeApp(App):
         Binding(
             "s", "toggle_notifications", "Notif Toggle/Settings", key_display="s/S"
         ),
-        Binding("S", "notification_settings", "Notification Settings", show=False),
+        Binding("S", "settings", "Settings", show=False),
         Binding("h", "toggle_hidden", "Show Hidden"),
         Binding("t", "change_theme", "Theme"),
         Binding("question_mark", "help", "Help"),
@@ -66,7 +66,6 @@ class FlaudeApp(App):
         self._active: dict[str, SessionState] = {}
         self._selected_id: str | None = None
         self._show_hidden = False
-        self._hidden_count = 0
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -130,20 +129,19 @@ class FlaudeApp(App):
 
         if self._show_hidden:
             visible = active
-            self._hidden_count = 0
+            hidden_count = 0
         else:
             visible = {}
-            hidden = 0
+            hidden_count = 0
             for sid, s in active.items():
                 idle_age = (now - s.last_event_at).total_seconds()
                 if s.status == SessionStatus.IDLE and idle_age >= hide_seconds:
-                    hidden += 1
+                    hidden_count += 1
                 else:
                     visible[sid] = s
-            self._hidden_count = hidden
 
         table = self.query_one(SessionTable)
-        table.update_sessions(visible, hidden_count=self._hidden_count)
+        table.update_sessions(visible, hidden_count=hidden_count)
         self.query_one(PermissionPanel).update_permissions(active)
         self._selected_id = table.get_selected_session_id()
 
@@ -287,7 +285,7 @@ class FlaudeApp(App):
         self.notify(f"Log: {MODE_LABELS[log.mode]}")
 
     # ------------------------------------------------------------------
-    # Notification actions
+    # Settings & notifications
     # ------------------------------------------------------------------
 
     def _sync_notifier(self) -> None:
@@ -311,22 +309,18 @@ class FlaudeApp(App):
         self._sync_notifier()
         self.notify(f"Notifications: {'ON' if enabled else 'OFF'}")
 
-    def action_notification_settings(self) -> None:
-        current = self._config.get("notifications", {})
-        current = migrate_notifications_config({"notifications": current})[
-            "notifications"
-        ]
+    def action_settings(self) -> None:
+        self._config = migrate_notifications_config(self._config)
 
         def on_result(result: dict | None) -> None:
             if result is None:
                 return
-            self._config["notifications"] = result
+            self._config = result
             save_config(self._config)
             self._sync_notifier()
-            status = "ON" if result["enabled"] else "OFF"
-            self.notify(f"Notifications: {status}")
+            self.notify("Settings saved")
 
-        self.push_screen(NotificationSettings(current), on_result)
+        self.push_screen(SettingsPanel(self._config), on_result)
 
     def action_help(self) -> None:
         self.push_screen(HelpDialog())
