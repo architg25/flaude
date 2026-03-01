@@ -42,7 +42,9 @@ class SessionTable(DataTable):
         self._last_order: list[str] = []
         self.border_title = "Sessions"
 
-    def update_sessions(self, sessions: dict[str, SessionState]) -> None:
+    def update_sessions(
+        self, sessions: dict[str, SessionState], hidden_count: int = 0
+    ) -> None:
         selected_key = self.get_selected_session_id()
 
         if not sessions:
@@ -95,7 +97,12 @@ class SessionTable(DataTable):
                         self.move_cursor(row=idx)
                         break
 
-        self.border_subtitle = f" {len(sorted_sessions)} active "
+        if hidden_count:
+            self.border_subtitle = (
+                f" {len(sorted_sessions)} active ({hidden_count} hidden) "
+            )
+        else:
+            self.border_subtitle = f" {len(sorted_sessions)} active "
 
     def get_selected_session_id(self) -> str | None:
         """Return the session_id of the currently highlighted row."""

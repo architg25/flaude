@@ -59,6 +59,9 @@ class HelpDialog(ModalScreen[None]):
             yield Static(
                 "[bold]S[/]             Notification Settings", classes="help-row"
             )
+            yield Static(
+                "[bold]h[/]             Toggle Hidden Sessions", classes="help-row"
+            )
             yield Static("[bold]l[/]             Cycle Log Mode", classes="help-row")
             yield Static("[bold]t[/]             Change Theme", classes="help-row")
             yield Static("[bold]?[/]             This Help", classes="help-row")

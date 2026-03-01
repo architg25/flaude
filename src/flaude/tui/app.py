@@ -8,7 +8,12 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Header, Footer, DataTable
 
 from flaude.config import load_config, save_config, migrate_notifications_config
-from flaude.constants import DEFAULT_THEME, TUI_REFRESH_INTERVAL, utcnow
+from flaude.constants import (
+    DEFAULT_THEME,
+    SOFT_HIDE_TIMEOUT,
+    TUI_REFRESH_INTERVAL,
+    utcnow,
+)
 from flaude.state.manager import StateManager
 from flaude.state.models import SessionState, SessionStatus, WAITING_STATUSES
 from flaude.state.cleanup import cleanup_stale_sessions, correct_stale_waiting
@@ -44,6 +49,7 @@ class FlaudeApp(App):
             "s", "toggle_notifications", "Notif Toggle/Settings", key_display="s/S"
         ),
         Binding("S", "notification_settings", "Notification Settings", show=False),
+        Binding("h", "toggle_hidden", "Show Hidden"),
         Binding("t", "change_theme", "Theme"),
         Binding("question_mark", "help", "Help"),
     ]
@@ -59,6 +65,8 @@ class FlaudeApp(App):
         self._notifier = NotificationManager(bell=self.bell)
         self._active: dict[str, SessionState] = {}
         self._selected_id: str | None = None
+        self._show_hidden = False
+        self._hidden_count = 0
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -112,8 +120,30 @@ class FlaudeApp(App):
         correct_stale_waiting(self._mgr, active)
         self._active = active
 
+        # Soft-hide: only IDLE sessions past the threshold get hidden
+        # Env var FLAUDE_SOFT_HIDE_TIMEOUT (seconds) overrides config if set
+        now = utcnow()
+        if SOFT_HIDE_TIMEOUT is not None:
+            hide_seconds = SOFT_HIDE_TIMEOUT
+        else:
+            hide_seconds = self._config.get("soft_hide_minutes", 30) * 60
+
+        if self._show_hidden:
+            visible = active
+            self._hidden_count = 0
+        else:
+            visible = {}
+            hidden = 0
+            for sid, s in active.items():
+                idle_age = (now - s.last_event_at).total_seconds()
+                if s.status == SessionStatus.IDLE and idle_age >= hide_seconds:
+                    hidden += 1
+                else:
+                    visible[sid] = s
+            self._hidden_count = hidden
+
         table = self.query_one(SessionTable)
-        table.update_sessions(active)
+        table.update_sessions(visible, hidden_count=self._hidden_count)
         self.query_one(PermissionPanel).update_permissions(active)
         self._selected_id = table.get_selected_session_id()
 
@@ -240,6 +270,12 @@ class FlaudeApp(App):
                 self.notify("Failed to send prompt", severity="error")
 
         self.push_screen(PromptDialog(f"Prompt ({project}):"), on_result)
+
+    def action_toggle_hidden(self) -> None:
+        self._show_hidden = not self._show_hidden
+        self._refresh_sessions()
+        label = "Showing all sessions" if self._show_hidden else "Hiding stale sessions"
+        self.notify(label)
 
     def action_cycle_log_mode(self) -> None:
         log = self.query_one(ActivityLog)

@@ -33,7 +33,11 @@ CONFIG_PATH = Path(
 
 DEFAULT_THEME = "tokyo-night"
 
-STALE_SESSION_TIMEOUT = int(os.environ.get("FLAUDE_STALE_SESSION_TIMEOUT", "1800"))
+STALE_SESSION_TIMEOUT = int(os.environ.get("FLAUDE_STALE_SESSION_TIMEOUT", "28800"))
+_SOFT_HIDE_ENV = os.environ.get("FLAUDE_SOFT_HIDE_TIMEOUT")
+SOFT_HIDE_TIMEOUT: int | None = (
+    int(_SOFT_HIDE_ENV) if _SOFT_HIDE_ENV is not None else None
+)
 TUI_REFRESH_INTERVAL = float(os.environ.get("FLAUDE_TUI_REFRESH_INTERVAL", "1.0"))
 TERMINAL_OVERRIDE = os.environ.get("FLAUDE_TERMINAL")
 
