@@ -76,7 +76,7 @@ class PromptDialog(ModalScreen[str | None]):
     }
     """
 
-    _HINT_BASE = "[bold]Enter[/] Send  [bold]Shift+Enter[/] New Line  "
+    _HINT_BASE = "[bold]Enter[/] Send  [bold]⇧Enter[/] New Line  "
     _HINT_PLAN_OFF = "[bold]⇧Tab[/] Plan Mode"
     _HINT_PLAN_ON = "[bold]⇧Tab[/] [green]Plan Mode ✓[/]"
     _HINT_TAIL = "  [bold]Esc[/] Cancel"
