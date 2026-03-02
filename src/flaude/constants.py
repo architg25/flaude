@@ -1,6 +1,7 @@
 """Paths, defaults, and environment variable configuration."""
 
 import os
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -49,10 +50,10 @@ _HOOK_BINARY = Path(__file__).parent / "bin" / "flaude-hook"
 if _HOOK_BINARY.exists() and os.access(_HOOK_BINARY, os.X_OK):
     HOOK_COMMAND = str(_HOOK_BINARY)
 else:
-    HOOK_COMMAND = "python3 -m flaude.hooks.dispatcher"
+    HOOK_COMMAND = f"{sys.executable} -m flaude.hooks.dispatcher"
 
 # Used to identify any flaude hook (Rust or Python) in settings.json
-HOOK_COMMAND_PYTHON = "python3 -m flaude.hooks.dispatcher"
+HOOK_COMMAND_PYTHON = f"{sys.executable} -m flaude.hooks.dispatcher"
 
 # Model token limits — single source of truth
 MODEL_LIMITS: dict[str, int] = {
