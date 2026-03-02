@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git config:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(echo exit: $?:*)",
+      "Bash(python3:*)",
+      "Bash(magick:*)",
+      "Bash(done)"
+    ]
+  }
+}

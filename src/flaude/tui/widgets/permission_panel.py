@@ -78,5 +78,12 @@ class PermissionPanel(Vertical):
         self.add_class("has-waiting")
 
         perm_list.clear()
-        for sid, state in waiting.items():
+        sorted_waiting = sorted(
+            waiting.items(),
+            key=lambda item: (
+                STATUS_INFO[item[1].status].sort_priority,
+                item[1].started_at,
+            ),
+        )
+        for sid, state in sorted_waiting:
             perm_list.append(WaitingItem(sid, state))
