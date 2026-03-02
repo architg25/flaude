@@ -76,7 +76,7 @@ def _is_flaude_hook(entry: dict) -> bool:
     """Check if a hook entry belongs to flaude (Rust binary or Python fallback)."""
     for hook in entry.get("hooks", []):
         cmd = hook.get("command", "")
-        if HOOK_COMMAND_PYTHON in cmd or "flaude-hook" in cmd:
+        if "flaude.hooks.dispatcher" in cmd or "flaude-hook" in cmd:
             return True
     return False
 
