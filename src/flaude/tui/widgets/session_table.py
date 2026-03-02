@@ -117,7 +117,7 @@ class SessionTable(DataTable):
                     Text("No sessions", style="dim"),
                     "",
                     Text(
-                        "press n or start claude (flaude init if hooks not set up)",
+                        "press n or start claude · existing sessions appear after their next hook fires · run flaude init if hooks not set up",
                         style="dim italic",
                     ),
                     "",
