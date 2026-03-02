@@ -125,6 +125,12 @@ struct SessionState {
     error_count: u64,
     #[serde(default)]
     subagent_count: i64,
+    #[serde(default)]
+    team_name: Option<String>,
+    #[serde(default)]
+    agent_name: Option<String>,
+    #[serde(default)]
+    lead_session_id: Option<String>,
 }
 
 fn default_permission_mode() -> String {
@@ -516,6 +522,9 @@ fn load_or_create(event: &serde_json::Value) -> SessionState {
             context_tokens: 0,
             error_count: 0,
             subagent_count: 0,
+            team_name: None,
+            agent_name: None,
+            lead_session_id: None,
         }
     });
 
@@ -561,9 +570,31 @@ fn get_opt_str(v: &serde_json::Value, key: &str) -> Option<String> {
 // Event handlers — mirrors dispatcher._handle_*()
 // ---------------------------------------------------------------------------
 
+fn read_lead_session_id(team_name: &str) -> Option<String> {
+    let home = env::var("HOME").ok()?;
+    let config_path = PathBuf::from(home)
+        .join(".claude")
+        .join("teams")
+        .join(team_name)
+        .join("config.json");
+    let content = fs::read_to_string(config_path).ok()?;
+    let config: serde_json::Value = serde_json::from_str(&content).ok()?;
+    config
+        .get("leadSessionId")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+}
+
 fn handle_session_start(event: &serde_json::Value) {
     let session_id = get_str(event, "session_id");
     let now = utcnow();
+
+    let team_name = get_opt_str(event, "teamName");
+    let agent_name = get_opt_str(event, "agentName");
+    let lead_session_id = team_name
+        .as_deref()
+        .and_then(read_lead_session_id);
+
     let state = SessionState {
         session_id: session_id.clone(),
         status: SessionStatus::New,
@@ -585,6 +616,9 @@ fn handle_session_start(event: &serde_json::Value) {
         context_tokens: 0,
         error_count: 0,
         subagent_count: 0,
+        team_name,
+        agent_name,
+        lead_session_id,
     };
     save_session(&state);
     log_activity(&session_id, "SessionStart", "");
@@ -881,6 +915,9 @@ mod tests {
             context_tokens: 0,
             error_count: 0,
             subagent_count: 0,
+            team_name: None,
+            agent_name: None,
+            lead_session_id: None,
         };
         let json = serde_json::to_string_pretty(&state).unwrap();
         let parsed: SessionState = serde_json::from_str(&json).unwrap();

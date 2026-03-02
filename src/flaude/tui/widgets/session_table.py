@@ -1,5 +1,6 @@
 """Session list widget — DataTable of active Claude Code sessions."""
 
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from flaude.state.models import SessionState, SessionStatus, STATUS_INFO
 
 
 def _build_row_data(
-    state: SessionState, now: datetime, css: dict
+    state: SessionState, now: datetime, css: dict, tree_prefix: str = ""
 ) -> tuple[Text, str, str, str, str, Text, str]:
     """Build the 7 cell values for a session row."""
     info = STATUS_INFO[state.status]
@@ -22,13 +23,72 @@ def _build_row_data(
         duration = format_compact_duration(now, state.turn_started_at)
     else:
         duration = format_compact_duration(now, state.last_event_at)
-    status_text = Text(f"{info.indicator} {info.label} {duration}", style=style)
+    status_text = Text(
+        f"{tree_prefix}{info.indicator} {info.label} {duration}", style=style
+    )
     project = Path(state.cwd).name if state.cwd else "?"
     uptime = format_uptime(now, state.started_at)
     term = state.terminal or "?"
     mode = state.permission_mode or "default"
     context = _format_context(state.context_tokens, state.model, css)
-    return status_text, state.session_id[:8], project[:20], term, mode, context, uptime
+    label = state.agent_name if state.agent_name else state.session_id[:8]
+    return status_text, label, project[:20], term, mode, context, uptime
+
+
+def _sort_sessions(sessions: dict[str, SessionState]) -> list[SessionState]:
+    """Sort sessions so team members appear right after their parent."""
+    by_id = sessions
+
+    # Group team members by lead_session_id
+    team_members: dict[str, list[SessionState]] = defaultdict(list)
+    standalone: list[SessionState] = []
+
+    for s in sessions.values():
+        if s.lead_session_id and s.lead_session_id in by_id:
+            team_members[s.lead_session_id].append(s)
+        else:
+            standalone.append(s)
+
+    # Sort standalone (includes team leads) by normal priority
+    standalone.sort(key=lambda s: (STATUS_INFO[s.status].sort_priority, s.started_at))
+
+    # Sort each team's members by agent name
+    for members in team_members.values():
+        members.sort(key=lambda s: s.agent_name or "")
+
+    # Interleave: after each parent, insert its team members
+    result: list[SessionState] = []
+    for s in standalone:
+        result.append(s)
+        if s.session_id in team_members:
+            result.extend(team_members[s.session_id])
+
+    return result
+
+
+def _compute_tree_prefixes(sorted_sessions: list[SessionState]) -> dict[str, str]:
+    """Compute tree connector prefixes for the Status column.
+
+    Team members get ├ or └ prefix. Others get empty string.
+    """
+    prefixes: dict[str, str] = {}
+
+    # Count team members per lead to know which is last
+    team_counts: dict[str, int] = defaultdict(int)
+    for s in sorted_sessions:
+        if s.lead_session_id and s.agent_name:
+            team_counts[s.lead_session_id] += 1
+
+    team_seen: dict[str, int] = defaultdict(int)
+    for s in sorted_sessions:
+        if s.agent_name and s.lead_session_id:
+            team_seen[s.lead_session_id] += 1
+            is_last = team_seen[s.lead_session_id] == team_counts[s.lead_session_id]
+            prefixes[s.session_id] = "└ " if is_last else "├ "
+        else:
+            prefixes[s.session_id] = ""
+
+    return prefixes
 
 
 class SessionTable(DataTable):
@@ -67,11 +127,9 @@ class SessionTable(DataTable):
                 )
             return
 
-        sorted_sessions = sorted(
-            sessions.values(),
-            key=lambda s: (STATUS_INFO[s.status].sort_priority, s.started_at),
-        )
+        sorted_sessions = _sort_sessions(sessions)
         new_order = [s.session_id for s in sorted_sessions]
+        prefixes = _compute_tree_prefixes(sorted_sessions)
 
         now = utcnow()
         css = self.app.get_css_variables()
@@ -79,14 +137,18 @@ class SessionTable(DataTable):
         if new_order == self._last_order:
             # Fast path: in-place cell updates (no DOM teardown)
             for state in sorted_sessions:
-                cells = _build_row_data(state, now, css)
+                cells = _build_row_data(
+                    state, now, css, prefixes.get(state.session_id, "")
+                )
                 for col_key, value in zip(self._col_keys, cells):
                     self.update_cell(state.session_id, col_key, value)
         else:
             # Slow path: sessions added/removed/reordered — full rebuild
             self.clear()
             for state in sorted_sessions:
-                cells = _build_row_data(state, now, css)
+                cells = _build_row_data(
+                    state, now, css, prefixes.get(state.session_id, "")
+                )
                 self.add_row(*cells, key=state.session_id)
             self._last_order = new_order
 

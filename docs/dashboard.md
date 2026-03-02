@@ -8,25 +8,25 @@ The TUI is split into a left pane and a right detail panel. Panels use rounded b
 
 **Left pane** (top to bottom):
 
-- **Sessions table** -- All active sessions with columns: Status, Session ID, Project, Terminal, Mode, Context, Uptime. Sessions needing attention sort to the top. When no sessions are active, shows a hint to start claude or run `flaude init`.
+- **Sessions table** -- All active sessions with columns: Status, Session, Project, Terminal, Mode, Context, Uptime. Sessions needing attention sort to the top. Agent team members are visually nested under their parent session with tree connectors (├/└) and show agent names instead of session IDs. When no sessions are active, shows a hint to start claude or run `flaude init`.
 - **Waiting panel** -- Sessions waiting for user input (permission prompts or questions). Shows question text and answer options when available. Border escalates to warning color only when sessions are actually waiting.
 - **Activity log** -- Transcript viewer for the selected session. Three verbosity modes cycled with `l`: All (full transcript), Summary (truncated output), Tools (hook events only).
 
 **Right pane**:
 
-- **Session detail** -- Sectioned view for the selected session, organized into: SESSION (ID, directory), STATUS (status, model, mode, terminal), TIMING (uptime, start time, current turn), CONTEXT (token usage vs model limit with color-coded ratio), LAST PROMPT, and PENDING QUESTION (with answer options or plan approval details including allowed prompts).
+- **Session detail** -- Sectioned view for the selected session, organized into: SESSION (ID, directory), TEAM (team name, agent role, lead session — shown for team members), STATUS (status, model, mode, terminal), TIMING (uptime, start time, current turn), CONTEXT (token usage vs model limit with color-coded ratio), LAST PROMPT, and PENDING QUESTION (with answer options or plan approval details including allowed prompts).
 
 ### Session table columns
 
-| Column   | Description                                                                                       |
-| -------- | ------------------------------------------------------------------------------------------------- |
-| Status   | Theme-colored label with duration (e.g. `RUNNING 3m12s`, `IDLE 45s`, `PERMISSION 1m05s`, `INPUT`) |
-| Session  | First 8 chars of the session ID                                                                   |
-| Project  | Directory basename                                                                                |
-| Terminal | Detected terminal (iTerm2, Ghostty, Terminal, Warp, IntelliJ)                                     |
-| Mode     | Permission mode (default, plan, acceptEdits, etc.)                                                |
-| Context  | Token count color-coded by model limit -- success (<50%), warning (50-80%), error (>80%)          |
-| Uptime   | Time since session started                                                                        |
+| Column   | Description                                                                                                                                             |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status   | Theme-colored label with duration (e.g. `RUNNING 3m12s`, `IDLE 45s`, `PERMISSION 1m05s`, `INPUT`). Team members are prefixed with tree connectors (├/└) |
+| Session  | First 8 chars of the session ID, or agent name for team members (e.g. `researcher`)                                                                     |
+| Project  | Directory basename                                                                                                                                      |
+| Terminal | Detected terminal (iTerm2, Ghostty, Terminal, Warp, IntelliJ)                                                                                           |
+| Mode     | Permission mode (default, plan, acceptEdits, etc.)                                                                                                      |
+| Context  | Token count color-coded by model limit -- success (<50%), warning (50-80%), error (>80%)                                                                |
+| Uptime   | Time since session started                                                                                                                              |
 
 Context token limits are model-aware: 1M for Opus, 200K for Sonnet and Haiku. Colors adapt to the selected Textual theme.
 

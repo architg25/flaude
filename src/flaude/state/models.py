@@ -79,3 +79,6 @@ class SessionState(BaseModel):
     context_tokens: int = 0
     error_count: int = 0
     subagent_count: int = 0
+    team_name: str | None = None
+    agent_name: str | None = None
+    lead_session_id: str | None = None

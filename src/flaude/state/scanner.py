@@ -123,6 +123,20 @@ def scan_preexisting_sessions(mgr: StateManager) -> int:
             except (ValueError, AttributeError):
                 pass
 
+        # Extract team metadata if present
+        team_name = entry.get("teamName")
+        agent_name = entry.get("agentName")
+        lead_session_id = None
+        if team_name:
+            try:
+                config_path = Path(
+                    f"~/.claude/teams/{team_name}/config.json"
+                ).expanduser()
+                config = json.loads(config_path.read_text(encoding="utf-8"))
+                lead_session_id = config.get("leadSessionId")
+            except (OSError, json.JSONDecodeError, KeyError):
+                pass
+
         state = SessionState(
             session_id=session_id,
             status=SessionStatus.IDLE,
@@ -131,8 +145,38 @@ def scan_preexisting_sessions(mgr: StateManager) -> int:
             started_at=started_at,
             last_event="Discovered",
             last_event_at=utcnow(),
+            team_name=team_name,
+            agent_name=agent_name,
+            lead_session_id=lead_session_id,
         )
         mgr.save_session(state)
         discovered += 1
 
+    # Enrich existing sessions that lack team fields (backfill after upgrade)
+    _backfill_team_fields(mgr)
+
     return discovered
+
+
+def _backfill_team_fields(mgr: StateManager) -> None:
+    """One-time backfill: read transcript first line for sessions missing team data."""
+    for session_id, state in mgr.load_all_sessions().items():
+        if state.team_name or not state.transcript_path:
+            continue
+        try:
+            with open(state.transcript_path, "r", encoding="utf-8") as f:
+                entry = json.loads(f.readline())
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        team_name = entry.get("teamName")
+        if not team_name:
+            continue
+        state.team_name = team_name
+        state.agent_name = entry.get("agentName")
+        try:
+            config_path = Path(f"~/.claude/teams/{team_name}/config.json").expanduser()
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            state.lead_session_id = config.get("leadSessionId")
+        except (OSError, json.JSONDecodeError, KeyError):
+            pass
+        mgr.save_session(state)

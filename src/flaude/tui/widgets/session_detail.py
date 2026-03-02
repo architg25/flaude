@@ -67,6 +67,16 @@ class SessionDetail(Static):
         lines.append(_kv("ID", state.session_id))
         lines.append(_kv("Dir", state.cwd))
 
+        # ── Team ──
+        if state.team_name:
+            lines.append("")
+            lines.append(_section_header("TEAM"))
+            lines.append(_kv("Team", state.team_name))
+            if state.agent_name:
+                lines.append(_kv("Role", state.agent_name))
+            if state.lead_session_id:
+                lines.append(_kv("Lead", state.lead_session_id[:8]))
+
         # ── Status ──
         lines.append("")
         lines.append(_section_header("STATUS"))

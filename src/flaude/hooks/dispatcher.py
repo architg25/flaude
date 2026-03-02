@@ -196,6 +196,11 @@ def _load_or_create(event: dict, sm: StateManager) -> SessionState:
     # Always update permission_mode — it can change during a session
     if event.get("permission_mode"):
         state.permission_mode = event["permission_mode"]
+    # Backfill team fields (for sessions created before team support)
+    if not state.team_name and event.get("teamName"):
+        state.team_name = event["teamName"]
+        state.agent_name = event.get("agentName")
+        state.lead_session_id = _read_lead_session_id(state.team_name)
     return state
 
 
@@ -204,9 +209,24 @@ def _load_or_create(event: dict, sm: StateManager) -> SessionState:
 # ---------------------------------------------------------------------------
 
 
+def _read_lead_session_id(team_name: str) -> str | None:
+    """Read leadSessionId from the team config file."""
+    try:
+        config_path = Path(f"~/.claude/teams/{team_name}/config.json").expanduser()
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        return config.get("leadSessionId")
+    except (OSError, json.JSONDecodeError, KeyError):
+        return None
+
+
 def _handle_session_start(event: dict, sm: StateManager) -> None:
     session_id = event.get("session_id", "")
     now = utcnow()
+
+    team_name = event.get("teamName")
+    agent_name = event.get("agentName")
+    lead_session_id = _read_lead_session_id(team_name) if team_name else None
+
     state = SessionState(
         session_id=session_id,
         status=SessionStatus.NEW,
@@ -218,6 +238,9 @@ def _handle_session_start(event: dict, sm: StateManager) -> None:
         started_at=now,
         last_event="SessionStart",
         last_event_at=now,
+        team_name=team_name,
+        agent_name=agent_name,
+        lead_session_id=lead_session_id,
     )
     sm.save_session(state)
     _log(session_id, "SessionStart")
