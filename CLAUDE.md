@@ -26,7 +26,12 @@ When the user asks to push, ship, or release changes:
 
 2. **Run the bump script**: `python scripts/bump_version.py <new-version>`
 
-3. **Commit, tag, and push**:
+3. **Update CHANGELOG.md** (minor and major bumps only, skip for patch):
+   - Add a new `### X.Y.Z` entry under the appropriate `## X.Y` section
+   - If it's a new minor, create a new `## X.Y — <theme>` section at the top with a short descriptive theme
+   - List notable changes as bullet points, derived from the commits since last tag
+
+4. **Commit, tag, and push**:
    ```
    git commit -am 'Bump to <new-version>'
    git tag v<new-version>
