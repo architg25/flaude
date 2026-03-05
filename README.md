@@ -43,16 +43,25 @@ Requires **Python 3.11+** and **macOS** (terminal navigation uses AppleScript).
 
 For faster hooks (~18x), install [Rust](https://www.rust-lang.org/tools/install) first. If `cargo` is available during install, the native hook dispatcher is compiled automatically. Without it, a Python fallback is used — everything works, just slightly slower hook invocations.
 
-```bash
-# Optional: install Rust for the native hook dispatcher
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+#### Recommended: install from Artifactory
 
-# Install flaude (compiles Rust binary if cargo is on PATH)
-pip install git+ssh://git@ghe.spotify.net/vibes/flaude.git
-flaude init
+```bash
+uv tool install flaude --index-url https://artifactory.spotify.net/artifactory/api/pypi/pypi/simple/
 ```
 
-`flaude init` registers hooks in `~/.claude/settings.json` (backs up the file first) and tells you which dispatcher is being used.
+Or with pip:
+
+```bash
+pip install flaude --index-url https://artifactory.spotify.net/artifactory/api/pypi/pypi/simple/
+```
+
+#### Alternative: install from source
+
+```bash
+pip install git+ssh://git@ghe.spotify.net/vibes/flaude.git
+```
+
+Hooks are registered automatically on first run. You can also run `flaude init` manually to (re-)register hooks — it backs up `~/.claude/settings.json` first.
 
 ### Usage
 
