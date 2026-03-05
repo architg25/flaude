@@ -76,15 +76,16 @@ Surface Claude Code agent teams (spawned via `TeamCreate` / `Agent` tool) in the
 - Detail panel section showing team overview: member names, assigned tasks, completion status
 - Investigate whether `PreToolUse`/`PostToolUse` events fire for subagent tool calls (they may only fire for the parent session)
 
-## Git worktree and Claude Code worktree support
+## Nested groups
 
-Support sessions running in git worktrees and Claude Code's built-in worktree mode (`EnterWorktree`).
+Support groups within groups — e.g. a "backend" group containing "auth-service" and "payment-service" sub-groups.
 
-**Problem:** Currently Flaude tracks sessions by cwd. When a session uses a git worktree (e.g. `.claude/worktrees/<name>`), the cwd is a different path from the main repo. The Project column shows the worktree directory name instead of the actual project. Terminal navigation via cwd matching may also fail if the worktree path doesn't match expectations.
+**Current state:** Sessions can be grouped by git repo (auto) or manually assigned to a flat named group. Groups cannot contain other groups.
 
-**What needs to change:**
+**Ideas:**
 
-- Detect when a session's cwd is inside a git worktree (check for `.git` file pointing to main repo's `.git/worktrees/`)
-- Resolve the main repo name for the Project column display
-- Track the worktree relationship so the dashboard can group sessions working on the same repo
-- Handle terminal navigation for worktree paths (cwd matching still works, but the project label should reflect the parent repo)
+- Use a path-like syntax for group names (e.g. `backend/auth-service`) to imply hierarchy
+- Render nested groups with indentation in the table (similar to how team members are indented under their lead)
+- Collapsible group headers — expand/collapse a parent group to show/hide its children
+- Allow drag-and-drop (via keybindings) to move a group under another group
+- Config format: `session_groups` values could use `/` as a nesting separator, or a separate `group_hierarchy` config section
