@@ -1,0 +1,40 @@
+id: flaude
+
+# Brief description of this component:
+description: Claude Code session manager — TUI dashboard for monitoring multiple concurrent Claude sessions
+
+# The system this component belongs to:
+system: flaude
+
+# Main owner of this component (LDAP group or individual):
+owner: architg
+
+# Intended usage of this component:
+#   'private' - only for use by the owner
+#   'public'  - exposes an api for other squads (like metadata)
+# Components that are under development, experimental, not
+# supported, replaced, liable to change without warning, etc.
+# should generally be marked as private.
+visibility: public
+
+# A list of other components (services, data stores, etc.) on which
+# this component depends. Must be valid service_discovery names
+# registered in the Nameless service.
+dependencies: []
+
+facts:
+  component_type: library
+
+  # Name of the slack channel that users should use to get support.
+  slack_channel: architg
+
+  # Email that users should use to get support.
+  support_email: architg@spotify.com
+
+  # Lifecycle is a new experimental feature
+  # we prefer one of: experimental, production, deprecated, removed
+  lifecycle: experimental
+
+  tags: ['python', 'rust']
+
+  library_name: flaude
