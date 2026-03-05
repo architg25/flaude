@@ -10,11 +10,13 @@ Claude Code session manager — TUI dashboard for monitoring multiple concurrent
 
 ## Version Management
 
-Version is auto-derived from git tags via `hatch-vcs` (backed by `setuptools-scm`).
+Version is auto-derived from git tags at build time (via `build_hook.py`).
 No manual version bumping needed — tag a commit and the version follows.
 
 - On tagged commits (e.g. `v0.14.0`): version = `0.14.0`
-- Between tags: version = `0.14.1.dev3+g<hash>` (auto-incremented)
+- Between tags (3 commits after `v0.14.0`): version = `0.14.3`
+- No tags: version = `0.0.<commit_count>`
+- No git: falls back to whatever is in `__init__.py`
 - `rust/Cargo.toml` version is cosmetic and no longer auto-synced.
 
 ## Release Workflow
