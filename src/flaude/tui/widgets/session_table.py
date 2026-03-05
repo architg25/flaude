@@ -70,10 +70,14 @@ def _build_row_data(
 
 
 def _sort_sessions(sessions: dict[str, SessionState]) -> list[SessionState]:
-    """Sort sessions so team members appear right after their parent."""
+    """Sort sessions: grouped by repo, sorted within each group by status/time.
+
+    Groups are stable — status changes only reorder within a group, never
+    cause a session to jump between groups.
+    """
     by_id = sessions
 
-    # Group team members by lead_session_id
+    # Separate team members from standalone sessions
     team_members: dict[str, list[SessionState]] = defaultdict(list)
     standalone: list[SessionState] = []
 
@@ -83,25 +87,41 @@ def _sort_sessions(sessions: dict[str, SessionState]) -> list[SessionState]:
         else:
             standalone.append(s)
 
-    # Sort standalone (includes team leads) by: repo group, then status priority, then start time
-    standalone.sort(
-        key=lambda s: (
-            s.git_repo_root or "",
-            STATUS_INFO[s.status].sort_priority,
-            s.started_at,
-        )
+    # Bucket standalone sessions by repo
+    repo_buckets: dict[str, list[SessionState]] = defaultdict(list)
+    ungrouped: list[SessionState] = []
+    for s in standalone:
+        if s.git_repo_root:
+            repo_buckets[s.git_repo_root].append(s)
+        else:
+            ungrouped.append(s)
+
+    # Sort within each bucket by status priority, then start time
+    sort_key = lambda s: (STATUS_INFO[s.status].sort_priority, s.started_at)
+    ungrouped.sort(key=sort_key)
+    for bucket in repo_buckets.values():
+        bucket.sort(key=sort_key)
+
+    # Stable group order: by earliest session start time in each group
+    ordered_repos = sorted(
+        repo_buckets, key=lambda r: min(s.started_at for s in repo_buckets[r])
     )
 
-    # Sort each team's members by agent name
+    # Sort team members
     for members in team_members.values():
         members.sort(key=lambda s: s.agent_name or "")
 
-    # Interleave: after each parent, insert its team members
+    # Assemble: ungrouped first, then each repo group
     result: list[SessionState] = []
-    for s in standalone:
+    for s in ungrouped:
         result.append(s)
         if s.session_id in team_members:
             result.extend(team_members[s.session_id])
+    for repo in ordered_repos:
+        for s in repo_buckets[repo]:
+            result.append(s)
+            if s.session_id in team_members:
+                result.extend(team_members[s.session_id])
 
     return result
 
