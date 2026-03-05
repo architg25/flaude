@@ -5,16 +5,20 @@ state transitions at key points. These catch bugs that unit tests miss:
 state not carried between events, fields not cleared, etc.
 """
 
+import json
 from datetime import timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 from helpers import make_state
 from flaude.hooks.dispatcher import (
+    _handle_permission_request,
     _handle_post_tool_use,
     _handle_pre_tool_use,
     _handle_session_end,
     _handle_session_start,
     _handle_stop,
+    _handle_subagent_stop,
     _handle_user_prompt_submit,
 )
 from flaude.constants import utcnow
@@ -356,3 +360,212 @@ class TestStaleWaitingCorrection:
         corrected = correct_stale_waiting(mgr, sessions)
         assert corrected == 0
         assert mgr.load_session("user-thinking").status == SessionStatus.WAITING_ANSWER
+
+
+class TestPermissionRequestFlow:
+    """Permission asked → user grants → work continues."""
+
+    def test_permission_grant_resumes_work(self, mgr, no_rules):
+        _handle_session_start(_ev(), mgr)
+        _handle_user_prompt_submit(_ev(user_prompt="Deploy to prod"), mgr)
+
+        # Claude wants to run a dangerous command
+        _handle_pre_tool_use(
+            _ev(
+                tool_name="Bash", tool_input={"command": "kubectl apply -f deploy.yaml"}
+            ),
+            mgr,
+        )
+        state = mgr.load_session(SID)
+        assert state.status == SessionStatus.WORKING
+
+        # Claude Code asks for permission
+        _handle_permission_request(_ev(tool_name="Bash"), mgr)
+        state = mgr.load_session(SID)
+        assert state.status == SessionStatus.WAITING_PERMISSION
+
+        # User grants — PostToolUse fires
+        _handle_post_tool_use(_ev(tool_name="Bash"), mgr)
+        state = mgr.load_session(SID)
+        assert state.status == SessionStatus.WORKING
+        assert state.pending_question is None
+
+    def test_permission_does_not_overwrite_waiting_answer(self, mgr, no_rules):
+        """If session is WAITING_ANSWER, PermissionRequest shouldn't downgrade it."""
+        _handle_session_start(_ev(), mgr)
+        _handle_user_prompt_submit(_ev(user_prompt="Help me"), mgr)
+
+        question = {"questions": [{"question": "Which DB?"}]}
+        _handle_pre_tool_use(_ev(tool_name="AskUserQuestion", tool_input=question), mgr)
+        assert mgr.load_session(SID).status == SessionStatus.WAITING_ANSWER
+
+        # Stale PermissionRequest arrives (race condition) — should NOT overwrite
+        _handle_permission_request(_ev(tool_name="Bash"), mgr)
+        assert mgr.load_session(SID).status == SessionStatus.WAITING_ANSWER
+
+
+class TestSubagentLifecycle:
+    """Parent spawns subagents, they complete, count tracks correctly."""
+
+    def test_subagent_count_lifecycle(self, mgr, no_rules):
+        _handle_session_start(_ev(), mgr)
+        _handle_user_prompt_submit(_ev(user_prompt="Run parallel tasks"), mgr)
+
+        # Two subagent tool uses (Agent tool)
+        for i in range(2):
+            _handle_pre_tool_use(
+                _ev(tool_name="Task", tool_input={"prompt": f"subtask {i}"}), mgr
+            )
+            _handle_post_tool_use(_ev(tool_name="Task"), mgr)
+
+        # Subagents complete
+        _handle_subagent_stop(_ev(), mgr)
+        state = mgr.load_session(SID)
+        # subagent_count was 0 (we didn't increment it — that's done by the TUI/scanner)
+        # but SubagentStop should not go below 0
+        assert state.subagent_count == 0
+
+    def test_subagent_count_tracks_from_nonzero(self, mgr, no_rules):
+        """When subagent_count is pre-set, SubagentStop decrements it."""
+        _handle_session_start(_ev(), mgr)
+        state = mgr.load_session(SID)
+        state.subagent_count = 3
+        mgr.save_session(state)
+
+        _handle_subagent_stop(_ev(), mgr)
+        assert mgr.load_session(SID).subagent_count == 2
+
+        _handle_subagent_stop(_ev(), mgr)
+        _handle_subagent_stop(_ev(), mgr)
+        assert mgr.load_session(SID).subagent_count == 0
+
+        # Extra stop — should not go negative
+        _handle_subagent_stop(_ev(), mgr)
+        assert mgr.load_session(SID).subagent_count == 0
+
+
+class TestTokenAndModelUpdateOnStop:
+    """Stop event reads token usage and model from transcript."""
+
+    def test_stop_reads_transcript_usage(self, mgr, no_rules, tmp_path):
+        transcript = tmp_path / "transcript.jsonl"
+        usage_entry = {
+            "message": {
+                "model": "claude-opus-4-20250514",
+                "usage": {
+                    "input_tokens": 10000,
+                    "cache_read_input_tokens": 50000,
+                    "cache_creation_input_tokens": 5000,
+                },
+            }
+        }
+        transcript.write_text(json.dumps(usage_entry) + "\n")
+
+        _handle_session_start(_ev(transcript_path=str(transcript)), mgr)
+        _handle_user_prompt_submit(_ev(user_prompt="Do stuff"), mgr)
+        _handle_stop(_ev(), mgr)
+
+        state = mgr.load_session(SID)
+        assert state.context_tokens == 65000
+        assert state.model == "claude-opus-4-20250514"
+
+    def test_stop_reads_custom_title_from_transcript(self, mgr, no_rules, tmp_path):
+        transcript = tmp_path / "transcript.jsonl"
+        rename_entry = {
+            "type": "custom-title",
+            "customTitle": "my-session-name",
+            "sessionId": SID,
+        }
+        transcript.write_text(json.dumps(rename_entry) + "\n")
+
+        _handle_session_start(_ev(transcript_path=str(transcript)), mgr)
+        _handle_stop(_ev(), mgr)
+
+        state = mgr.load_session(SID)
+        assert state.custom_title == "my-session-name"
+
+
+class TestGitBranchRefreshOnStop:
+    """Stop event refreshes git branch in case user switched branches."""
+
+    def test_branch_updated_on_stop(self, mgr, no_rules):
+        _handle_session_start(_ev(), mgr)
+        state = mgr.load_session(SID)
+        assert (
+            state.git_branch is not None or state.git_branch is None
+        )  # whatever git returns
+
+        # Simulate branch change
+        with patch(
+            "flaude.hooks.dispatcher.get_git_info",
+            return_value=("/tmp/project", "feature-xyz", False),
+        ):
+            _handle_user_prompt_submit(_ev(user_prompt="Switch branch work"), mgr)
+            _handle_stop(_ev(), mgr)
+
+        state = mgr.load_session(SID)
+        assert state.git_branch == "feature-xyz"
+
+
+class TestSessionReconnect:
+    """SessionEnd then new SessionStart — fresh state, no bleed."""
+
+    def test_reconnect_gets_clean_state(self, mgr, no_rules):
+        # First session lifecycle
+        _handle_session_start(_ev(), mgr)
+        _handle_user_prompt_submit(_ev(user_prompt="First task"), mgr)
+        _handle_pre_tool_use(
+            _ev(tool_name="Bash", tool_input={"command": "make build"}), mgr
+        )
+        _handle_post_tool_use(_ev(tool_name="Bash"), mgr)
+        _handle_stop(_ev(), mgr)
+
+        state = mgr.load_session(SID)
+        assert state.tool_stats["Bash"] == 1
+        assert state.last_prompt == "First task"
+
+        # Session ends
+        _handle_session_end(_ev(), mgr)
+        assert mgr.load_session(SID) is None
+
+        # New session with same ID — should be completely fresh
+        _handle_session_start(_ev(), mgr)
+        state = mgr.load_session(SID)
+        assert state.status == SessionStatus.NEW
+        assert state.tool_stats == {}
+        assert state.last_prompt is None
+        assert state.last_tool is None
+        assert state.context_tokens == 0
+
+
+class TestTeamSessionFlow:
+    """Team metadata flows through session events correctly."""
+
+    def test_team_fields_persisted(self, mgr, no_rules, tmp_path):
+        # Create a fake team config
+        teams_dir = tmp_path / ".claude" / "teams" / "alpha"
+        teams_dir.mkdir(parents=True)
+        config = teams_dir / "config.json"
+        config.write_text(json.dumps({"leadSessionId": "lead-abc"}))
+
+        with patch(
+            "flaude.hooks.dispatcher._read_lead_session_id",
+            return_value="lead-abc",
+        ):
+            _handle_session_start(_ev(teamName="alpha", agentName="worker-1"), mgr)
+
+        state = mgr.load_session(SID)
+        assert state.team_name == "alpha"
+        assert state.agent_name == "worker-1"
+        assert state.lead_session_id == "lead-abc"
+
+        # Team fields survive through tool use
+        _handle_user_prompt_submit(_ev(user_prompt="Team work"), mgr)
+        _handle_pre_tool_use(
+            _ev(tool_name="Read", tool_input={"file_path": "/a.py"}), mgr
+        )
+        _handle_stop(_ev(), mgr)
+
+        state = mgr.load_session(SID)
+        assert state.team_name == "alpha"
+        assert state.agent_name == "worker-1"

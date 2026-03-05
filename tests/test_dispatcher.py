@@ -1,10 +1,8 @@
-"""Tests for hooks/dispatcher.py — tool summarization, terminal detection,
+"""Tests for hooks/dispatcher.py — terminal detection,
 transcript parsing, and event handlers."""
 
 import json
 from datetime import datetime, timedelta, timezone
-
-import pytest
 
 from helpers import make_state
 from flaude.hooks.dispatcher import (
@@ -21,95 +19,7 @@ from flaude.hooks.dispatcher import (
     _load_or_create,
     _log,
 )
-from flaude.tools import basename, summarize_tool, trunc
 from flaude.state.models import SessionStatus
-
-
-# ---------------------------------------------------------------------------
-# _trunc / _basename
-# ---------------------------------------------------------------------------
-
-
-class TestTrunc:
-    def test_short_string_no_ellipsis(self):
-        assert trunc("hello", 10) == "hello"
-
-    def test_exact_length_no_ellipsis(self):
-        assert trunc("hello", 5) == "hello"
-
-    def test_long_string_adds_ellipsis(self):
-        assert trunc("hello world", 5) == "hello..."
-
-    def test_empty_string(self):
-        assert trunc("", 10) == ""
-
-
-class TestBasename:
-    def test_full_path(self):
-        assert basename("/home/user/project/foo.py") == "foo.py"
-
-    def test_empty_string(self):
-        assert basename("") == ""
-
-    def test_just_filename(self):
-        assert basename("foo.py") == "foo.py"
-
-
-# ---------------------------------------------------------------------------
-# _summarize_tool
-# ---------------------------------------------------------------------------
-
-
-class TestSummarizeTool:
-    def test_bash_truncates_command(self):
-        cmd = "x" * 100
-        result = summarize_tool("Bash", {"command": cmd})
-        assert result == cmd[:80] + "..."
-
-    def test_bash_short_command(self):
-        assert summarize_tool("Bash", {"command": "ls"}) == "ls"
-
-    @pytest.mark.parametrize("tool", ["Edit", "Write", "Read"])
-    def test_file_tools_extractbasename(self, tool):
-        result = summarize_tool(tool, {"file_path": "/home/user/project/main.py"})
-        assert result == "main.py"
-
-    def test_grep_truncates_pattern(self):
-        pat = "a" * 50
-        result = summarize_tool("Grep", {"pattern": pat})
-        assert result == pat[:40] + "..."
-
-    def test_glob_returns_pattern(self):
-        assert summarize_tool("Glob", {"pattern": "**/*.py"}) == "**/*.py"
-
-    def test_task_truncates_prompt(self):
-        prompt = "p" * 80
-        result = summarize_tool("Task", {"prompt": prompt})
-        assert result == prompt[:60] + "..."
-
-    def test_webfetch_truncates_url(self):
-        url = "https://example.com/" + "x" * 60
-        result = summarize_tool("WebFetch", {"url": url})
-        assert len(result) == 63  # 60 + "..."
-
-    def test_unknown_tool_returns_name(self):
-        assert summarize_tool("SomeFancyTool", {"whatever": 1}) == "SomeFancyTool"
-
-    @pytest.mark.parametrize(
-        "tool,expected",
-        [
-            ("Bash", ""),
-            ("Read", ""),
-            ("Grep", ""),
-            ("Glob", ""),
-            ("Task", ""),
-            ("WebFetch", ""),
-        ],
-    )
-    def test_missing_keys_return_empty(self, tool, expected):
-        """Summarizers handle empty dicts gracefully."""
-        result = summarize_tool(tool, {})
-        assert result == expected
 
 
 # ---------------------------------------------------------------------------

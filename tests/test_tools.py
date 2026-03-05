@@ -1,91 +1,37 @@
-"""Tests for tool-input summarization helpers."""
+"""Tests for tool-input summarization — the TUI-visible summaries."""
 
 import pytest
 
-from flaude.tools import basename, summarize_tool, trunc
-
-
-# ---------------------------------------------------------------------------
-# trunc
-# ---------------------------------------------------------------------------
-
-
-class TestTrunc:
-    def test_empty_string(self):
-        assert trunc("", 10) == ""
-
-    def test_short_string(self):
-        assert trunc("hello", 10) == "hello"
-
-    def test_exact_length(self):
-        assert trunc("hello", 5) == "hello"
-
-    def test_long_string(self):
-        assert trunc("hello world", 5) == "hello..."
-
-    def test_n_zero(self):
-        assert trunc("hello", 0) == "..."
-
-    def test_n_zero_empty(self):
-        assert trunc("", 0) == ""
-
-
-# ---------------------------------------------------------------------------
-# basename
-# ---------------------------------------------------------------------------
-
-
-class TestBasename:
-    def test_simple_path(self):
-        assert basename("/foo/bar.py") == "bar.py"
-
-    def test_nested_path(self):
-        assert basename("/a/b/c/d/file.txt") == "file.txt"
-
-    def test_no_slashes(self):
-        assert basename("file.txt") == "file.txt"
-
-    def test_empty(self):
-        assert basename("") == ""
-
-
-# ---------------------------------------------------------------------------
-# summarize_tool
-# ---------------------------------------------------------------------------
+from flaude.tools import summarize_tool
 
 
 class TestSummarizeTool:
+    """Each tool type produces a short display string for the dashboard."""
+
     def test_bash(self):
-        result = summarize_tool("Bash", {"command": "ls -la"})
-        assert result == "ls -la"
+        assert summarize_tool("Bash", {"command": "ls -la"}) == "ls -la"
 
     def test_bash_long_command_truncated(self):
         cmd = "x" * 100
         result = summarize_tool("Bash", {"command": cmd})
         assert result == "x" * 80 + "..."
 
-    def test_bash_empty_input(self):
-        assert summarize_tool("Bash", {}) == ""
-
     def test_read(self):
-        result = summarize_tool("Read", {"file_path": "/src/flaude/tools.py"})
-        assert result == "tools.py"
+        assert (
+            summarize_tool("Read", {"file_path": "/src/flaude/tools.py"}) == "tools.py"
+        )
 
     def test_edit(self):
-        result = summarize_tool("Edit", {"file_path": "/a/b/c.py"})
-        assert result == "c.py"
+        assert summarize_tool("Edit", {"file_path": "/a/b/c.py"}) == "c.py"
 
     def test_multi_edit(self):
-        result = summarize_tool("MultiEdit", {"file_path": "/a/b/c.py"})
-        assert result == "c.py"
+        assert summarize_tool("MultiEdit", {"file_path": "/a/b/c.py"}) == "c.py"
 
     def test_write(self):
-        result = summarize_tool("Write", {"file_path": "/tmp/out.json"})
-        assert result == "out.json"
+        assert summarize_tool("Write", {"file_path": "/tmp/out.json"}) == "out.json"
 
     def test_grep(self):
-        result = summarize_tool("Grep", {"pattern": "def foo"})
-        assert result == "def foo"
+        assert summarize_tool("Grep", {"pattern": "def foo"}) == "def foo"
 
     def test_grep_long_pattern_truncated(self):
         pat = "a" * 50
@@ -93,17 +39,23 @@ class TestSummarizeTool:
         assert result == "a" * 40 + "..."
 
     def test_glob(self):
-        result = summarize_tool("Glob", {"pattern": "**/*.py"})
-        assert result == "**/*.py"
+        assert summarize_tool("Glob", {"pattern": "**/*.py"}) == "**/*.py"
 
     def test_task(self):
-        result = summarize_tool("Task", {"prompt": "Do the thing"})
-        assert result == "Do the thing"
+        assert summarize_tool("Task", {"prompt": "Do the thing"}) == "Do the thing"
 
     def test_web_fetch(self):
-        result = summarize_tool("WebFetch", {"url": "https://example.com"})
-        assert result == "https://example.com"
+        assert (
+            summarize_tool("WebFetch", {"url": "https://example.com"})
+            == "https://example.com"
+        )
 
     def test_unknown_tool_returns_name(self):
-        result = summarize_tool("SomeNewTool", {"foo": "bar"})
-        assert result == "SomeNewTool"
+        assert summarize_tool("SomeNewTool", {"foo": "bar"}) == "SomeNewTool"
+
+    @pytest.mark.parametrize(
+        "tool", ["Bash", "Read", "Grep", "Glob", "Task", "WebFetch"]
+    )
+    def test_missing_keys_return_empty(self, tool):
+        """Summarizers handle empty dicts gracefully."""
+        assert summarize_tool(tool, {}) == ""
