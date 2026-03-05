@@ -86,7 +86,7 @@ class SessionDetail(Static):
             lines.append(_kv("Repo", repo_display))
             lines.append(_kv("Branch", state.git_branch or "[dim]detached[/]"))
             if state.git_is_worktree:
-                lines.append(_kv("Type", "worktree"))
+                lines.append(_kv("Tree", state.cwd))
             lines.append(_kv("Root", state.git_repo_root))
 
         # ── Team ──

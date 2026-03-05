@@ -19,15 +19,24 @@ def _repo_header_text(display: str) -> Text:
     return Text(f"── {display} ──", style="bold dim")
 
 
-def _format_project(state: SessionState) -> str:
+def _format_project(state: SessionState, max_len: int = 25) -> str:
     """Format the Project column value.
 
-    Shows 'repo-name (branch)' for git repos, CWD basename otherwise.
+    Shows 'repo-name (branch)' for git repos, truncating the repo name
+    with an ellipsis when the full string exceeds *max_len* so the branch
+    stays visible.  Falls back to CWD basename for non-git sessions.
     """
     if state.git_repo_root:
         repo_name = Path(state.git_repo_root).name
         branch = state.git_branch or "detached"
-        return f"{repo_name} ({branch})"
+        full = f"{repo_name} ({branch})"
+        if len(full) <= max_len:
+            return full
+        suffix = f" ({branch})"
+        avail = max_len - len(suffix) - 1  # 1 for ellipsis
+        if avail >= 4:
+            return f"{repo_name[:avail]}…{suffix}"
+        return full[:max_len]
     return Path(state.cwd).name if state.cwd else "?"
 
 
@@ -72,8 +81,8 @@ def _build_row_data(
     label = state.agent_name if state.agent_name else state.session_id[:8]
     if include_name:
         name = _format_name(state)
-        return status_text, name, label, project[:30], term, mode, context, uptime
-    return status_text, label, project[:30], term, mode, context, uptime
+        return status_text, name, label, project, term, mode, context, uptime
+    return status_text, label, project, term, mode, context, uptime
 
 
 def _sort_sessions(sessions: dict[str, SessionState]) -> list[SessionState]:
