@@ -26,9 +26,10 @@ When the user asks to push, ship, or release changes:
 
 2. **Run the bump script**: `python scripts/bump_version.py <new-version>`
 
-3. **Update CHANGELOG.md** (minor and major bumps only, skip for patch):
-   - Add a new `### X.Y.Z` entry under the appropriate `## X.Y` section
-   - If it's a new minor, create a new `## X.Y — <theme>` section at the top with a short descriptive theme
+3. **Update CHANGELOG.md**:
+   - **Patch**: Add bullet points to the existing `### X.Y.Z-1` entry (or create `### X.Y.Z` if the previous patch had a distinct theme)
+   - **Minor**: Create a new `## X.Y — <theme>` section at the top with a `### X.Y.0` entry
+   - **Major**: Same as minor but with a new major section
    - List notable changes as bullet points, derived from the commits since last tag
 
 4. **Commit, tag, and push**:

@@ -2,6 +2,14 @@
 
 ## 0.12 — Git worktree support & repo grouping
 
+### 0.12.5
+
+- Fix repeated git subprocess calls on every hook event for non-repo directories
+- Increase transcript tail read from 10KB to 50KB to catch usage data in larger responses
+- Pre-compile regex patterns in rules engine
+- Extract shared team config reader, removing duplication between dispatcher and scanner
+- Add MultiEdit to Rust tool summarizer (parity fix)
+
 ### 0.12.4
 
 - Configurable grouping — auto-group toggle and manual group assignment via `G` key
