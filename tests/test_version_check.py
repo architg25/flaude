@@ -30,6 +30,15 @@ class TestVersionTuple:
     def test_single_part(self):
         assert _version_tuple("42") == (42,)
 
+    def test_dev_version(self):
+        assert _version_tuple("0.13.1.dev2+g6ed61ee96.d20260305") == (0, 13, 1)
+
+    def test_post_version(self):
+        assert _version_tuple("1.0.0.post1") == (1, 0, 0)
+
+    def test_local_version(self):
+        assert _version_tuple("2.1.0+local") == (2, 1, 0)
+
     def test_invalid_raises(self):
         with pytest.raises(ValueError):
             _version_tuple("abc.def")
@@ -165,6 +174,27 @@ class TestCheckForUpdate:
         config = {}
         assert check_for_update(config) is None
         assert config["update_check"]["remote_version"] is None
+
+    def test_dev_version_detects_minor_bump(self, monkeypatch):
+        """Dev version like 0.13.1.dev2 should detect a newer minor release."""
+        import flaude.version_check as vc
+
+        monkeypatch.setattr(vc, "__version__", "0.13.1.dev2+g6ed61ee96.d20260305")
+        monkeypatch.setattr(vc, "fetch_remote_version", lambda: "0.14.0")
+
+        config = {}
+        result = check_for_update(config)
+        assert result == ("0.13.1.dev2+g6ed61ee96.d20260305", "0.14.0")
+
+    def test_dev_version_same_minor_returns_none(self, monkeypatch):
+        """Dev version should not trigger update for same minor."""
+        import flaude.version_check as vc
+
+        monkeypatch.setattr(vc, "__version__", "0.13.1.dev2+g6ed61ee96.d20260305")
+        monkeypatch.setattr(vc, "fetch_remote_version", lambda: "0.13.5")
+
+        config = {}
+        assert check_for_update(config) is None
 
     def test_corrupted_cache_refetches(self, monkeypatch):
         """Corrupted last_check value should trigger a fresh fetch."""

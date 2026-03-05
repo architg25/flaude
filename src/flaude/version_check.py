@@ -4,6 +4,7 @@ Checks at most once per 24 hours. Stores last-check timestamp and result
 in ~/.config/flaude/config.yaml under an ``update_check`` key.
 """
 
+import re
 import subprocess
 from datetime import UTC, datetime
 
@@ -14,6 +15,8 @@ _CHECK_INTERVAL_HOURS = 24
 
 
 def _version_tuple(v: str) -> tuple[int, ...]:
+    # Strip PEP 440 dev/post/local suffixes (e.g. "0.13.1.dev2+ghash")
+    v = re.split(r"\.dev|\.post|\+", v)[0]
     return tuple(int(x) for x in v.split("."))
 
 
