@@ -6,7 +6,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from flaude.version_check import (
-    _parse_version,
     _version_tuple,
     check_for_update,
     fetch_remote_version,
@@ -37,82 +36,26 @@ class TestVersionTuple:
 
 
 # ---------------------------------------------------------------------------
-# _parse_version
-# ---------------------------------------------------------------------------
-
-
-class TestParseVersion:
-    def test_double_quotes(self):
-        assert _parse_version('__version__ = "1.2.3"') == "1.2.3"
-
-    def test_single_quotes(self):
-        assert _parse_version("__version__ = '0.12.4'") == "0.12.4"
-
-    def test_no_spaces(self):
-        assert _parse_version('__version__="5.6.7"') == "5.6.7"
-
-    def test_extra_whitespace(self):
-        assert _parse_version('__version__  =  "9.0.1"') == "9.0.1"
-
-    def test_multiline(self):
-        text = '# comment\n__version__ = "2.3.4"\nfoo = 1'
-        assert _parse_version(text) == "2.3.4"
-
-    def test_missing_returns_none(self):
-        assert _parse_version("no version here") is None
-
-    def test_empty_string(self):
-        assert _parse_version("") is None
-
-
-# ---------------------------------------------------------------------------
 # fetch_remote_version  (mocked subprocess)
 # ---------------------------------------------------------------------------
 
 
 class TestFetchRemoteVersion:
-    def test_archive_success(self, monkeypatch):
-        """When git archive succeeds, return the parsed version."""
-        import io
-        import tarfile
-
-        # Build a minimal tar containing the __init__.py content
-        init_content = b'__version__ = "1.0.0"\n'
-        buf = io.BytesIO()
-        with tarfile.open(fileobj=buf, mode="w") as tar:
-            info = tarfile.TarInfo(name="src/flaude/__init__.py")
-            info.size = len(init_content)
-            tar.addfile(info, io.BytesIO(init_content))
-        tar_bytes = buf.getvalue()
+    def test_tags_success(self, monkeypatch):
+        """Return highest version from remote tags."""
+        stdout = (
+            "abc123\trefs/tags/v0.10.0\n"
+            "def456\trefs/tags/v0.12.4\n"
+            "ghi789\trefs/tags/v0.11.0\n"
+        )
 
         def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(cmd, 0, stdout=tar_bytes, stderr=b"")
-
-        monkeypatch.setattr(subprocess, "run", fake_run)
-        assert fetch_remote_version() == "1.0.0"
-
-    def test_archive_fails_tags_fallback(self, monkeypatch):
-        """When archive fails, fall back to git ls-remote --tags."""
-        call_count = 0
-
-        def fake_run(cmd, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if "archive" in cmd:
-                return subprocess.CompletedProcess(cmd, 1, stdout=b"", stderr=b"")
-            # ls-remote --tags
-            stdout = (
-                "abc123\trefs/tags/v0.10.0\n"
-                "def456\trefs/tags/v0.12.4\n"
-                "ghi789\trefs/tags/v0.11.0\n"
-            )
             return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
         assert fetch_remote_version() == "0.12.4"
-        assert call_count == 2
 
-    def test_both_fail_returns_none(self, monkeypatch):
+    def test_fail_returns_none(self, monkeypatch):
         def fake_run(cmd, **kwargs):
             return subprocess.CompletedProcess(cmd, 1, stdout=b"", stderr=b"")
 
@@ -121,11 +64,9 @@ class TestFetchRemoteVersion:
 
     def test_tags_with_peeled_refs(self, monkeypatch):
         """Tags that end with ^{} should be handled correctly."""
+        stdout = "abc\trefs/tags/v2.0.0\n" "def\trefs/tags/v2.0.0^{}\n"
 
         def fake_run(cmd, **kwargs):
-            if "archive" in cmd:
-                return subprocess.CompletedProcess(cmd, 1, stdout=b"", stderr=b"")
-            stdout = "abc\trefs/tags/v2.0.0\n" "def\trefs/tags/v2.0.0^{}\n"
             return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
