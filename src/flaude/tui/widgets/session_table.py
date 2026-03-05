@@ -48,7 +48,10 @@ def _format_name(state: SessionState) -> Text:
     Text objects are used to prevent Rich markup interpretation.
     """
     if state.custom_title:
-        return Text(state.custom_title)
+        title = state.custom_title
+        if len(title) > 20:
+            title = title[:19] + "…"
+        return Text(title)
     return Text("[default]", style="dim")
 
 
