@@ -123,7 +123,7 @@ class FlaudeApp(App):
         correct_stale_waiting(self._mgr, active)
         self._active = active
 
-        # Soft-hide: only IDLE sessions past the threshold get hidden
+        # Soft-hide: IDLE and NEW sessions past the threshold get hidden
         # Env var FLAUDE_SOFT_HIDE_TIMEOUT (seconds) overrides config if set
         now = utcnow()
         if SOFT_HIDE_TIMEOUT is not None:
@@ -139,7 +139,10 @@ class FlaudeApp(App):
             hidden_count = 0
             for sid, s in active.items():
                 idle_age = (now - s.last_event_at).total_seconds()
-                if s.status == SessionStatus.IDLE and idle_age >= hide_seconds:
+                if (
+                    s.status in (SessionStatus.IDLE, SessionStatus.NEW)
+                    and idle_age >= hide_seconds
+                ):
                     hidden_count += 1
                 else:
                     visible[sid] = s
