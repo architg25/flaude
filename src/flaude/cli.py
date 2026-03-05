@@ -120,7 +120,13 @@ def _print_update_result(old_version: str) -> None:
         print(f"Already up to date ({old_version}).")
     else:
         print(f"Updated: {old_version} -> {new_version}")
-    print("\nRun 'flaude init' to re-register hooks if the hook binary was rebuilt.")
+    print()
+
+
+def _run_init() -> None:
+    """Run hook init after update."""
+    init_args = argparse.Namespace(dry_run=False)
+    cmd_init(init_args)
 
 
 def cmd_update(args: argparse.Namespace) -> None:
@@ -130,32 +136,16 @@ def cmd_update(args: argparse.Namespace) -> None:
 
     from flaude import __version__
 
+    allow_dev = getattr(args, "dev", False)
+
     print(f"Current version: {__version__}")
     print("Updating flaude...")
 
     # Strategy 1: uv from Artifactory (fastest — pre-built wheel)
     uv = shutil.which("uv")
     if uv:
-        result = subprocess.run(
-            [
-                uv,
-                "pip",
-                "install",
-                "--upgrade",
-                "flaude",
-                "--index-url",
-                _ARTIFACTORY_INDEX,
-            ]
-        )
-        if result.returncode == 0:
-            _print_update_result(__version__)
-            return
-
-    # Strategy 2: pip from Artifactory
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
+        cmd = [
+            uv,
             "pip",
             "install",
             "--upgrade",
@@ -163,9 +153,31 @@ def cmd_update(args: argparse.Namespace) -> None:
             "--index-url",
             _ARTIFACTORY_INDEX,
         ]
-    )
+        if not allow_dev:
+            cmd.append("--prerelease=disallow")
+        result = subprocess.run(cmd)
+        if result.returncode == 0:
+            _print_update_result(__version__)
+            _run_init()
+            return
+
+    # Strategy 2: pip from Artifactory
+    cmd = [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--upgrade",
+        "flaude",
+        "--index-url",
+        _ARTIFACTORY_INDEX,
+    ]
+    if not allow_dev:
+        cmd.append("--no-pre")
+    result = subprocess.run(cmd)
     if result.returncode == 0:
         _print_update_result(__version__)
+        _run_init()
         return
 
     # Strategy 3: pip from git+ssh (fallback)
@@ -175,6 +187,7 @@ def cmd_update(args: argparse.Namespace) -> None:
         )
         if result.returncode == 0:
             _print_update_result(__version__)
+            _run_init()
             return
 
     print(
@@ -433,7 +446,10 @@ def main() -> None:
     sub.add_parser("status", help="Quick status table without launching the TUI")
 
     # update
-    sub.add_parser("update", help="Self-update flaude from Git remote")
+    p_update = sub.add_parser("update", help="Self-update flaude")
+    p_update.add_argument(
+        "--dev", action="store_true", help="Include dev/pre-release versions"
+    )
 
     args = parser.parse_args()
 
