@@ -208,6 +208,14 @@ class FlaudeApp(App):
     def _cleanup(self) -> None:
         cleanup_stale_sessions(self._mgr)
 
+    def _update_config_dict(self, key: str, data: dict) -> None:
+        """Save a config dict, removing the key entirely if empty."""
+        if data:
+            self._config[key] = data
+        else:
+            self._config.pop(key, None)
+        save_config(self._config)
+
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle Enter: navigate to session, or rename group if on a header."""
         key = str(event.row_key.value) if event.row_key else ""
@@ -233,9 +241,7 @@ class FlaudeApp(App):
                 groups.pop(repo_root, None)
             else:
                 groups[repo_root] = name
-            if not groups:
-                self._config.pop("group_names", None)
-            save_config(self._config)
+            self._update_config_dict("group_names", groups)
             self._refresh_sessions()
 
         self.push_screen(
@@ -251,18 +257,10 @@ class FlaudeApp(App):
             name = name.strip()
             sg = self._config.get("session_groups", {})
             if not name:
-                # Clear: ungroup all sessions in this group
-                to_remove = [sid for sid, g in sg.items() if g == old_name]
-                for sid in to_remove:
-                    del sg[sid]
+                sg = {sid: g for sid, g in sg.items() if g != old_name}
             elif name != old_name:
-                # Rename: update all sessions from old_name to new name
-                for sid in list(sg):
-                    if sg[sid] == old_name:
-                        sg[sid] = name
-            if not sg:
-                self._config.pop("session_groups", None)
-            save_config(self._config)
+                sg = {sid: (name if g == old_name else g) for sid, g in sg.items()}
+            self._update_config_dict("session_groups", sg)
             self._refresh_sessions()
 
         self.push_screen(
@@ -289,9 +287,7 @@ class FlaudeApp(App):
                 groups[session_id] = name
             else:
                 groups.pop(session_id, None)
-            if not groups:
-                self._config.pop("session_groups", None)
-            save_config(self._config)
+            self._update_config_dict("session_groups", groups)
             self._refresh_sessions()
 
         self.push_screen(

@@ -16,7 +16,7 @@ REPO_HEADER_PREFIX = "__repo__"
 GROUP_HEADER_PREFIX = "__group__"
 
 
-def _repo_header_text(display: str) -> Text:
+def _header_text(display: str) -> Text:
     return Text(f"── {display} ──", style="bold dim")
 
 
@@ -113,14 +113,12 @@ def _sort_sessions(
     Groups are stable — status changes only reorder within a group, never
     cause a session to jump between groups.
     """
-    by_id = sessions
-
     # Separate team members from standalone sessions
     team_members: dict[str, list[SessionState]] = defaultdict(list)
     standalone: list[SessionState] = []
 
     for s in sessions.values():
-        if s.lead_session_id and s.lead_session_id in by_id:
+        if s.lead_session_id and s.lead_session_id in sessions:
             team_members[s.lead_session_id].append(s)
         else:
             standalone.append(s)
@@ -300,19 +298,20 @@ class SessionTable(DataTable):
         sorted_sessions = _sort_sessions(sessions, auto_group, session_groups)
         prefixes = _compute_tree_prefixes(sorted_sessions)
 
-        # Collect group keys and compute display names
-        group_keys: set[str] = set()
-        for s in sorted_sessions:
-            key = _session_group_key(s, auto_group, session_groups)
-            if key:
-                group_keys.add(key)
-        display_names = _group_display_names(group_keys, group_names)
+        # Compute group key for each session once
+        session_group_map = {
+            s.session_id: _session_group_key(s, auto_group, session_groups)
+            for s in sorted_sessions
+        }
+        display_names = _group_display_names(
+            {g for g in session_group_map.values() if g}, group_names
+        )
 
         # Build ordered list of keys including group header sentinels
         new_order: list[str] = []
         last_group: str | None = None
         for s in sorted_sessions:
-            group = _session_group_key(s, auto_group, session_groups)
+            group = session_group_map[s.session_id]
             if group and group != last_group:
                 new_order.append(group)
                 last_group = group
@@ -339,17 +338,17 @@ class SessionTable(DataTable):
             # Update header row labels (names may have changed)
             for key in new_order:
                 if key in display_names:
-                    header_text = _repo_header_text(display_names[key])
+                    header_text = _header_text(display_names[key])
                     self.update_cell(key, self._col_keys[0], header_text)
         else:
             # Slow path: sessions added/removed/reordered — full rebuild
             self.clear()
             last_group = None
             for state in sorted_sessions:
-                group = _session_group_key(state, auto_group, session_groups)
+                group = session_group_map[state.session_id]
                 if group and group != last_group:
                     display = display_names.get(group, "?")
-                    header_text = _repo_header_text(display)
+                    header_text = _header_text(display)
                     empty_cells = [""] * (num_cols - 1)
                     self.add_row(header_text, *empty_cells, key=group)
                     last_group = group
