@@ -22,6 +22,9 @@ visibility: public
 # registered in the Nameless service.
 dependencies: []
 
+annotations:
+  backstage.io/techdocs-ref: dir:.
+
 facts:
   component_type: library
 

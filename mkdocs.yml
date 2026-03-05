@@ -1,0 +1,9 @@
+site_name: flaude
+site_description: Claude Code session manager — TUI dashboard for monitoring multiple concurrent Claude sessions
+
+nav:
+  - Home: index.md
+  - Dashboard: dashboard.md
+  - Rust Hook: rust-hook.md
+  - Known Bugs: BUG.md
+  - TODO: TODO.md
