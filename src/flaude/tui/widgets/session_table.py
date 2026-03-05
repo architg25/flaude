@@ -126,19 +126,30 @@ def _sort_sessions(sessions: dict[str, SessionState]) -> list[SessionState]:
     return result
 
 
-def _repo_display_names(sorted_sessions: list[SessionState]) -> dict[str, str]:
-    """Map repo root paths to display names, disambiguating collisions."""
+def _repo_display_names(
+    sorted_sessions: list[SessionState],
+    group_names: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Map repo root paths to display names, with user overrides."""
     roots: set[str] = set()
     for s in sorted_sessions:
         if s.git_repo_root:
             roots.add(s.git_repo_root)
     if not roots:
         return {}
-    # Detect name collisions
-    name_to_roots: dict[str, list[str]] = defaultdict(list)
-    for root in roots:
-        name_to_roots[Path(root).name].append(root)
+    # Apply user-configured names first
     names: dict[str, str] = {}
+    remaining: set[str] = set()
+    for root in roots:
+        custom = (group_names or {}).get(root)
+        if custom:
+            names[root] = custom
+        else:
+            remaining.add(root)
+    # Auto-name the rest, disambiguating collisions
+    name_to_roots: dict[str, list[str]] = defaultdict(list)
+    for root in remaining:
+        name_to_roots[Path(root).name].append(root)
     for name, paths in name_to_roots.items():
         if len(paths) == 1:
             names[paths[0]] = name
@@ -212,6 +223,7 @@ class SessionTable(DataTable):
         sessions: dict[str, SessionState],
         hidden_count: int = 0,
         any_named: bool = False,
+        group_names: dict[str, str] | None = None,
     ) -> None:
         selected_key = self.get_selected_session_id()
 
@@ -241,7 +253,7 @@ class SessionTable(DataTable):
 
         sorted_sessions = _sort_sessions(sessions)
         prefixes = _compute_tree_prefixes(sorted_sessions)
-        repo_names = _repo_display_names(sorted_sessions)
+        repo_names = _repo_display_names(sorted_sessions, group_names)
 
         # Build ordered list of keys including repo header sentinels
         new_order: list[str] = []
@@ -260,7 +272,7 @@ class SessionTable(DataTable):
         num_cols = len(self._col_keys)
 
         if new_order == self._last_order:
-            # Fast path: in-place cell updates (skip header rows)
+            # Fast path: in-place cell updates
             for state in sorted_sessions:
                 cells = _build_row_data(
                     state,
@@ -271,6 +283,13 @@ class SessionTable(DataTable):
                 )
                 for col_key, value in zip(self._col_keys, cells):
                     self.update_cell(state.session_id, col_key, value)
+            # Update header row labels (repo names may have changed)
+            for key in new_order:
+                if key.startswith("__repo__"):
+                    repo = key.removeprefix("__repo__")
+                    display = repo_names.get(repo, Path(repo).name)
+                    header_text = Text(f"── {display} ──", style="bold dim")
+                    self.update_cell(key, self._col_keys[0], header_text)
         else:
             # Slow path: sessions added/removed/reordered — full rebuild
             self.clear()
@@ -324,6 +343,18 @@ class SessionTable(DataTable):
         if key.startswith("__repo__"):
             return None
         return key
+
+    def get_selected_repo_root(self) -> str | None:
+        """Return the repo root if cursor is on a group header row."""
+        if self.row_count == 0:
+            return None
+        row_key, _ = self.coordinate_to_cell_key(self.cursor_coordinate)
+        if not row_key:
+            return None
+        key = str(row_key.value)
+        if key.startswith("__repo__"):
+            return key.removeprefix("__repo__")
+        return None
 
 
 def _format_context(tokens: int, model: str | None, css: dict) -> Text:

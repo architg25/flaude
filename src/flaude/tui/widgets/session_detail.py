@@ -51,14 +51,20 @@ class SessionDetail(Static):
     def __init__(self, **kwargs) -> None:
         super().__init__("", **kwargs)
 
-    def update_session(self, state: SessionState | None) -> None:
+    def update_session(
+        self,
+        state: SessionState | None,
+        group_names: dict[str, str] | None = None,
+    ) -> None:
         if state is None:
             self.update("[dim italic]  Select a session to view details[/]")
             self.border_title = "Detail"
             return
 
         if state.git_repo_root:
-            project = Path(state.git_repo_root).name
+            project = (group_names or {}).get(state.git_repo_root) or Path(
+                state.git_repo_root
+            ).name
         else:
             project = Path(state.cwd).name if state.cwd else "?"
         self.border_title = f" Detail ── {project} "
@@ -76,7 +82,10 @@ class SessionDetail(Static):
         if state.git_repo_root:
             lines.append("")
             lines.append(_section_header("GIT"))
-            lines.append(_kv("Repo", Path(state.git_repo_root).name))
+            repo_display = (group_names or {}).get(state.git_repo_root) or Path(
+                state.git_repo_root
+            ).name
+            lines.append(_kv("Repo", repo_display))
             lines.append(_kv("Branch", state.git_branch or "[dim]detached[/]"))
             if state.git_is_worktree:
                 lines.append(_kv("Type", "worktree"))

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -144,7 +146,12 @@ class FlaudeApp(App):
 
         table = self.query_one(SessionTable)
         any_named = any(s.custom_title for s in active.values())
-        table.update_sessions(visible, hidden_count=hidden_count, any_named=any_named)
+        table.update_sessions(
+            visible,
+            hidden_count=hidden_count,
+            any_named=any_named,
+            group_names=self._config.get("group_names"),
+        )
         self.query_one(PermissionPanel).update_permissions(active)
         self._selected_id = table.get_selected_session_id()
 
@@ -166,8 +173,9 @@ class FlaudeApp(App):
         selected_id = self._selected_id
 
         detail = self.query_one(SessionDetail)
+        group_names = self._config.get("group_names")
         if selected_id and selected_id in active:
-            detail.update_session(active[selected_id])
+            detail.update_session(active[selected_id], group_names=group_names)
         else:
             detail.update_session(None)
 
@@ -186,8 +194,36 @@ class FlaudeApp(App):
         cleanup_stale_sessions(self._mgr)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Handle Enter on a session row."""
-        self.action_goto_session()
+        """Handle Enter: navigate to session, or rename group if on a header."""
+        key = str(event.row_key.value) if event.row_key else ""
+        if key.startswith("__repo__"):
+            self._rename_group(key.removeprefix("__repo__"))
+        else:
+            self.action_goto_session()
+
+    def _rename_group(self, repo_root: str) -> None:
+        """Open input dialog to rename a repo group."""
+        group_names = self._config.get("group_names", {})
+        current = group_names.get(repo_root) or Path(repo_root).name
+        auto_name = Path(repo_root).name
+
+        def on_result(name: str | None) -> None:
+            if name is None:
+                return
+            name = name.strip()
+            groups = self._config.setdefault("group_names", {})
+            if not name or name == auto_name:
+                groups.pop(repo_root, None)
+            else:
+                groups[repo_root] = name
+            if not groups:
+                self._config.pop("group_names", None)
+            save_config(self._config)
+            self._refresh_sessions()
+
+        self.push_screen(
+            InputDialog("Group name:", current, autocomplete=False), on_result
+        )
 
     def action_goto_session(self) -> None:
         table = self.query_one(SessionTable)

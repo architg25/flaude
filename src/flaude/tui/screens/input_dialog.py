@@ -45,10 +45,13 @@ class InputDialog(ModalScreen[str | None]):
     }
     """
 
-    def __init__(self, label: str, default: str = "") -> None:
+    def __init__(
+        self, label: str, default: str = "", autocomplete: bool = True
+    ) -> None:
         super().__init__()
         self._label = label
         self._default = default
+        self._autocomplete = autocomplete
         self._current_suggestions: list[str] = []
         self._selected_index: int = 0
 
@@ -56,24 +59,34 @@ class InputDialog(ModalScreen[str | None]):
         with Vertical(id="input-dialog"):
             yield Static(self._label, id="input-label")
             yield Input(value=self._default, id="input-field")
-            yield Static("", id="suggestions")
-            yield Static(
-                "[bold]Tab[/] Autocomplete  "
-                "[bold]Up[/]/[bold]Down[/] Navigate  "
-                "[bold]Enter[/] Confirm  "
-                "[bold]Esc[/] Cancel",
-                id="input-hint",
-            )
+            if self._autocomplete:
+                yield Static("", id="suggestions")
+                yield Static(
+                    "[bold]Tab[/] Autocomplete  "
+                    "[bold]Up[/]/[bold]Down[/] Navigate  "
+                    "[bold]Enter[/] Confirm  "
+                    "[bold]Esc[/] Cancel",
+                    id="input-hint",
+                )
+            else:
+                yield Static(
+                    "[bold]Enter[/] Confirm  [bold]Esc[/] Cancel",
+                    id="input-hint",
+                )
 
     def on_mount(self) -> None:
-        self._update_suggestions(self._default)
+        if self._autocomplete:
+            self._update_suggestions(self._default)
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        self._selected_index = 0
-        self._update_suggestions(event.value)
+        if self._autocomplete:
+            self._selected_index = 0
+            self._update_suggestions(event.value)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        self.dismiss(event.value.strip() or None)
+        value = event.value.strip()
+        # In autocomplete mode, empty = cancel. Otherwise, empty is a valid value.
+        self.dismiss(value if (value or not self._autocomplete) else None)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
