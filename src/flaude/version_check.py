@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 
 from flaude import __version__
 
-_REMOTE = "git@ghe.spotify.net:architg/flaude.git"
+_REMOTE = "git@ghe.spotify.net:vibes/flaude.git"
 _CHECK_INTERVAL_HOURS = 24
 _INIT_PATH = "src/flaude/__init__.py"
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13 — Repo migration to vibes org
+
+### 0.13.0
+
+- Move canonical repo URL to `ghe.spotify.net:vibes/flaude`
+- `flaude update` tries new URL first, falls back to old with migration message
+- Remove dead GitHub Actions workflow
+- Update install URL in README
+
 ## 0.12 — Git worktree support & repo grouping
 
 ### 0.12.5

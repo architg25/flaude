@@ -48,7 +48,7 @@ For faster hooks (~18x), install [Rust](https://www.rust-lang.org/tools/install)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Install flaude (compiles Rust binary if cargo is on PATH)
-pip install git+ssh://git@ghe.spotify.net/architg/flaude.git
+pip install git+ssh://git@ghe.spotify.net/vibes/flaude.git
 flaude init
 ```
 

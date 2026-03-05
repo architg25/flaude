@@ -101,7 +101,8 @@ def _copy_default_rules() -> None:
     shutil.copy2(default_rules, RULES_PATH)
 
 
-_PIP_URL = "git+ssh://git@ghe.spotify.net/architg/flaude.git"
+_PIP_URL = "git+ssh://git@ghe.spotify.net/vibes/flaude.git"
+_PIP_URL_OLD = "git+ssh://git@ghe.spotify.net/architg/flaude.git"
 
 
 def cmd_update(args: argparse.Namespace) -> None:
@@ -113,10 +114,19 @@ def cmd_update(args: argparse.Namespace) -> None:
     print(f"Current version: {__version__}")
     print("Updating flaude...")
 
-    cmd = [sys.executable, "-m", "pip", "install", "--force-reinstall", _PIP_URL]
-    result = subprocess.run(cmd)
-    if result.returncode != 0:
-        print("Update failed.", file=sys.stderr)
+    # Try new URL first, fall back to old (pre-transfer redirect)
+    for url in (_PIP_URL, _PIP_URL_OLD):
+        cmd = [sys.executable, "-m", "pip", "install", "--force-reinstall", url]
+        result = subprocess.run(cmd)
+        if result.returncode == 0:
+            break
+    else:
+        print(
+            "\nUpdate failed. The repository may have moved.\n"
+            "Try reinstalling:\n\n"
+            f"  pip install {_PIP_URL}\n",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # Read new version from the freshly installed package (can't re-import)
