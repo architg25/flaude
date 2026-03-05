@@ -76,6 +76,31 @@ Surface Claude Code agent teams (spawned via `TeamCreate` / `Agent` tool) in the
 - Detail panel section showing team overview: member names, assigned tasks, completion status
 - Investigate whether `PreToolUse`/`PostToolUse` events fire for subagent tool calls (they may only fire for the parent session)
 
+## Terminal-agnostic mode via tmux (`flaude-tmux`)
+
+Flaude currently relies on iTerm2's AppleScript API for terminal interaction (sending text, targeting tabs by TTY). This locks out terminals like Ghostty, Warp, and the default Terminal.app which lack per-tab scripting APIs.
+
+**Idea:** Use tmux as the universal session transport. tmux panes/windows can be targeted by name or ID regardless of which terminal renders them, making send-text, kill-session, and permission management work everywhere.
+
+**Two modes:**
+
+1. **Attach to existing tmux sessions** — If the user already runs Claude sessions inside tmux panes, Flaude discovers them (via `tmux list-panes`, match by TTY or pane title) and controls them through tmux commands instead of AppleScript.
+2. **Spawn sessions in tmux** — `flaude-tmux` launches a tmux session with a dedicated window per Claude session. Flaude manages the full lifecycle: spawn pane → run `claude` → monitor via hooks → send text via `tmux send-keys`.
+
+**What this enables:**
+
+- `send_text_to_session` works on any terminal (Ghostty, Warp, Terminal.app, headless SSH)
+- Kill session (`d` key) works everywhere, not just iTerm2
+- Permission management from dashboard becomes feasible (no AppleScript race conditions — tmux send-keys is deterministic)
+- Headless/remote monitoring — run `flaude-tmux` on a server, attach from anywhere
+
+**Open questions:**
+
+- Should this be a separate entrypoint (`flaude-tmux`) or a config flag (`terminal_backend: tmux`)?
+- How to handle the case where some sessions are in tmux and some are in iTerm2 (mixed mode)?
+- tmux session naming convention — use the Claude session ID as the pane title?
+- Does the user need tmux pre-installed, or should Flaude offer to set it up?
+
 ## Nested groups
 
 Support groups within groups — e.g. a "backend" group containing "auth-service" and "payment-service" sub-groups.
