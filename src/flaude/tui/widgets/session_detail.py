@@ -57,7 +57,10 @@ class SessionDetail(Static):
             self.border_title = "Detail"
             return
 
-        project = Path(state.cwd).name if state.cwd else "?"
+        if state.git_repo_root:
+            project = Path(state.git_repo_root).name
+        else:
+            project = Path(state.cwd).name if state.cwd else "?"
         self.border_title = f" Detail ── {project} "
 
         lines: list[str] = []
@@ -68,6 +71,16 @@ class SessionDetail(Static):
         if state.custom_title:
             lines.append(_kv("Name", state.custom_title))
         lines.append(_kv("Dir", state.cwd))
+
+        # ── Git ──
+        if state.git_repo_root:
+            lines.append("")
+            lines.append(_section_header("GIT"))
+            lines.append(_kv("Repo", Path(state.git_repo_root).name))
+            lines.append(_kv("Branch", state.git_branch or "[dim]detached[/]"))
+            if state.git_is_worktree:
+                lines.append(_kv("Type", "worktree"))
+            lines.append(_kv("Root", state.git_repo_root))
 
         # ── Team ──
         if state.team_name:

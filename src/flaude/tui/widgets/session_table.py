@@ -12,6 +12,18 @@ from flaude.formatting import format_uptime, format_compact_duration, format_tok
 from flaude.state.models import SessionState, SessionStatus, STATUS_INFO
 
 
+def _format_project(state: SessionState) -> str:
+    """Format the Project column value.
+
+    Shows 'repo-name (branch)' for git repos, CWD basename otherwise.
+    """
+    if state.git_repo_root:
+        repo_name = Path(state.git_repo_root).name
+        branch = state.git_branch or "detached"
+        return f"{repo_name} ({branch})"
+    return Path(state.cwd).name if state.cwd else "?"
+
+
 def _format_name(state: SessionState) -> Text:
     """Return the display name for the Name column.
 
@@ -45,7 +57,7 @@ def _build_row_data(
     status_text = Text(
         f"{tree_prefix}{info.indicator} {info.label} {duration}", style=style
     )
-    project = Path(state.cwd).name if state.cwd else "?"
+    project = _format_project(state)
     uptime = format_uptime(now, state.started_at)
     term = state.terminal or "?"
     mode = state.permission_mode or "default"
@@ -53,8 +65,8 @@ def _build_row_data(
     label = state.agent_name if state.agent_name else state.session_id[:8]
     if include_name:
         name = _format_name(state)
-        return status_text, name, label, project[:20], term, mode, context, uptime
-    return status_text, label, project[:20], term, mode, context, uptime
+        return status_text, name, label, project[:30], term, mode, context, uptime
+    return status_text, label, project[:30], term, mode, context, uptime
 
 
 def _sort_sessions(sessions: dict[str, SessionState]) -> list[SessionState]:
@@ -71,8 +83,14 @@ def _sort_sessions(sessions: dict[str, SessionState]) -> list[SessionState]:
         else:
             standalone.append(s)
 
-    # Sort standalone (includes team leads) by normal priority
-    standalone.sort(key=lambda s: (STATUS_INFO[s.status].sort_priority, s.started_at))
+    # Sort standalone (includes team leads) by: repo group, then status priority, then start time
+    standalone.sort(
+        key=lambda s: (
+            s.git_repo_root or "",
+            STATUS_INFO[s.status].sort_priority,
+            s.started_at,
+        )
+    )
 
     # Sort each team's members by agent name
     for members in team_members.values():
@@ -86,6 +104,29 @@ def _sort_sessions(sessions: dict[str, SessionState]) -> list[SessionState]:
             result.extend(team_members[s.session_id])
 
     return result
+
+
+def _repo_display_names(sorted_sessions: list[SessionState]) -> dict[str, str]:
+    """Map repo root paths to display names, disambiguating collisions."""
+    roots: set[str] = set()
+    for s in sorted_sessions:
+        if s.git_repo_root:
+            roots.add(s.git_repo_root)
+    if not roots:
+        return {}
+    # Detect name collisions
+    name_to_roots: dict[str, list[str]] = defaultdict(list)
+    for root in roots:
+        name_to_roots[Path(root).name].append(root)
+    names: dict[str, str] = {}
+    for name, paths in name_to_roots.items():
+        if len(paths) == 1:
+            names[paths[0]] = name
+        else:
+            for p in paths:
+                parent = Path(p).parent.name
+                names[p] = f"{parent}/{name}"
+    return names
 
 
 def _compute_tree_prefixes(sorted_sessions: list[SessionState]) -> dict[str, str]:
@@ -132,7 +173,14 @@ class SessionTable(DataTable):
         self._has_name_col = include_name
         if include_name:
             self._col_keys = self.add_columns(
-                "Status", "Name", "Session", "Project", "Terminal", "Mode", "Context", "Uptime"
+                "Status",
+                "Name",
+                "Session",
+                "Project",
+                "Terminal",
+                "Mode",
+                "Context",
+                "Uptime",
             )
         else:
             self._col_keys = self.add_columns(
@@ -172,17 +220,33 @@ class SessionTable(DataTable):
             self._rebuild_columns(should_have_name)
 
         sorted_sessions = _sort_sessions(sessions)
-        new_order = [s.session_id for s in sorted_sessions]
         prefixes = _compute_tree_prefixes(sorted_sessions)
+        repo_names = _repo_display_names(sorted_sessions)
+
+        # Build ordered list of keys including repo header sentinels
+        new_order: list[str] = []
+        last_repo: str | None = None
+        for s in sorted_sessions:
+            repo = s.git_repo_root
+            if repo and repo != last_repo:
+                new_order.append(f"__repo__{repo}")
+                last_repo = repo
+            elif not repo and last_repo is not None:
+                last_repo = None
+            new_order.append(s.session_id)
 
         now = utcnow()
         css = self.app.get_css_variables()
+        num_cols = len(self._col_keys)
 
         if new_order == self._last_order:
-            # Fast path: in-place cell updates (no DOM teardown)
+            # Fast path: in-place cell updates (skip header rows)
             for state in sorted_sessions:
                 cells = _build_row_data(
-                    state, now, css, prefixes.get(state.session_id, ""),
+                    state,
+                    now,
+                    css,
+                    prefixes.get(state.session_id, ""),
                     include_name=self._has_name_col,
                 )
                 for col_key, value in zip(self._col_keys, cells):
@@ -190,9 +254,23 @@ class SessionTable(DataTable):
         else:
             # Slow path: sessions added/removed/reordered — full rebuild
             self.clear()
+            last_repo = None
             for state in sorted_sessions:
+                repo = state.git_repo_root
+                if repo and repo != last_repo:
+                    header_key = f"__repo__{repo}"
+                    display = repo_names.get(repo, Path(repo).name)
+                    header_text = Text(f"── {display} ──", style="bold dim")
+                    empty_cells = [""] * (num_cols - 1)
+                    self.add_row(header_text, *empty_cells, key=header_key)
+                    last_repo = repo
+                elif not repo and last_repo is not None:
+                    last_repo = None
                 cells = _build_row_data(
-                    state, now, css, prefixes.get(state.session_id, ""),
+                    state,
+                    now,
+                    css,
+                    prefixes.get(state.session_id, ""),
                     include_name=self._has_name_col,
                 )
                 self.add_row(*cells, key=state.session_id)
@@ -200,8 +278,8 @@ class SessionTable(DataTable):
 
             # Restore cursor to previously selected row
             if selected_key:
-                for idx, sid in enumerate(new_order):
-                    if sid == selected_key:
+                for idx, key in enumerate(new_order):
+                    if key == selected_key:
                         self.move_cursor(row=idx)
                         break
 
@@ -213,11 +291,19 @@ class SessionTable(DataTable):
             self.border_subtitle = f" {len(sorted_sessions)} active "
 
     def get_selected_session_id(self) -> str | None:
-        """Return the session_id of the currently highlighted row."""
+        """Return the session_id of the currently highlighted row.
+
+        Returns None for repo header rows (keys starting with '__repo__').
+        """
         if self.row_count == 0:
             return None
         row_key, _ = self.coordinate_to_cell_key(self.cursor_coordinate)
-        return str(row_key.value) if row_key else None
+        if not row_key:
+            return None
+        key = str(row_key.value)
+        if key.startswith("__repo__"):
+            return None
+        return key
 
 
 def _format_context(tokens: int, model: str | None, css: dict) -> Text:

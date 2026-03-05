@@ -20,6 +20,7 @@ from flaude.constants import (
     ensure_dirs,
     utcnow,
 )
+from flaude.git import get_git_info
 from flaude.rules.engine import RulesEngine
 from flaude.state.manager import StateManager
 from flaude.state.models import LastTool, SessionState, SessionStatus
@@ -235,6 +236,12 @@ def _load_or_create(event: dict, sm: StateManager) -> SessionState:
     # Update custom_title if the event provides one — Claude Code sends it after /rename
     if event.get("customTitle"):
         state.custom_title = event["customTitle"]
+    # Backfill git fields for sessions created before worktree support
+    if state.git_repo_root is None and state.cwd:
+        repo_root, branch, is_wt = get_git_info(state.cwd)
+        state.git_repo_root = repo_root
+        state.git_branch = branch
+        state.git_is_worktree = is_wt
     return state
 
 
@@ -276,6 +283,10 @@ def _handle_session_start(event: dict, sm: StateManager) -> None:
         agent_name=agent_name,
         lead_session_id=lead_session_id,
     )
+    repo_root, branch, is_wt = get_git_info(state.cwd)
+    state.git_repo_root = repo_root
+    state.git_branch = branch
+    state.git_is_worktree = is_wt
     sm.save_session(state)
     _log(session_id, "SessionStart")
 
@@ -352,6 +363,11 @@ def _handle_stop(event: dict, sm: StateManager) -> None:
         state.model = model
     if custom_title:
         state.custom_title = custom_title
+    # Refresh branch in case user checked out a different branch during the turn
+    if state.cwd:
+        _, branch, _ = get_git_info(state.cwd)
+        if branch:
+            state.git_branch = branch
     sm.save_session(state)
     _log(state.session_id, "Stop", "idle")
 

@@ -57,6 +57,71 @@ fn ensure_dirs() {
 }
 
 // ---------------------------------------------------------------------------
+// Git info — mirrors git.py get_git_info()
+// ---------------------------------------------------------------------------
+
+/// Return (repo_root, branch, is_worktree) for a directory.
+///
+/// Uses a single `git rev-parse` call.  Returns (None, None, false)
+/// if *cwd* is not inside a git repo or on any error.
+fn get_git_info(cwd: &str) -> (Option<String>, Option<String>, bool) {
+    if cwd.is_empty() {
+        return (None, None, false);
+    }
+    let output = match std::process::Command::new("git")
+        .args([
+            "-C",
+            cwd,
+            "rev-parse",
+            "--show-toplevel",
+            "--git-common-dir",
+            "--abbrev-ref",
+            "HEAD",
+        ])
+        .output()
+    {
+        Ok(o) if o.status.success() => o,
+        _ => return (None, None, false),
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = stdout.trim().lines().collect();
+    if lines.len() < 3 {
+        return (None, None, false);
+    }
+
+    let toplevel = lines[0];
+    let git_common_dir = lines[1];
+    let branch_raw = lines[2];
+
+    // Resolve git_common_dir to absolute path
+    let common_abs = {
+        let p = PathBuf::from(git_common_dir);
+        if p.is_absolute() {
+            p
+        } else {
+            PathBuf::from(toplevel).join(git_common_dir)
+        }
+    };
+    // Canonicalize to resolve ".." and symlinks; fall back to the joined path
+    let common_abs = fs::canonicalize(&common_abs).unwrap_or(common_abs);
+
+    // Canonical repo root = parent of the shared .git directory
+    let repo_root = common_abs
+        .parent()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| toplevel.to_string());
+    let is_worktree = repo_root != toplevel;
+
+    let branch = if branch_raw == "HEAD" {
+        None
+    } else {
+        Some(branch_raw.to_string())
+    };
+
+    (Some(repo_root), branch, is_worktree)
+}
+
+// ---------------------------------------------------------------------------
 // Models — mirrors state/models.py
 // ---------------------------------------------------------------------------
 
@@ -133,6 +198,12 @@ struct SessionState {
     lead_session_id: Option<String>,
     #[serde(default)]
     custom_title: Option<String>,
+    #[serde(default)]
+    git_repo_root: Option<String>,
+    #[serde(default)]
+    git_branch: Option<String>,
+    #[serde(default)]
+    git_is_worktree: bool,
 }
 
 fn default_permission_mode() -> String {
@@ -565,6 +636,9 @@ fn load_or_create(event: &serde_json::Value) -> SessionState {
             agent_name: None,
             lead_session_id: None,
             custom_title: None,
+            git_repo_root: None,
+            git_branch: None,
+            git_is_worktree: false,
         }
     });
 
@@ -587,6 +661,13 @@ fn load_or_create(event: &serde_json::Value) -> SessionState {
     // Update custom_title if the event provides one — Claude Code sends it after /rename
     if let Some(t) = get_opt_str(event, "customTitle") {
         state.custom_title = Some(t);
+    }
+    // Backfill git fields for sessions created before worktree support
+    if state.git_repo_root.is_none() && !state.cwd.is_empty() {
+        let (repo_root, branch, is_wt) = get_git_info(&state.cwd);
+        state.git_repo_root = repo_root;
+        state.git_branch = branch;
+        state.git_is_worktree = is_wt;
     }
 
     state
@@ -639,7 +720,7 @@ fn handle_session_start(event: &serde_json::Value) {
         .as_deref()
         .and_then(read_lead_session_id);
 
-    let state = SessionState {
+    let mut state = SessionState {
         session_id: session_id.clone(),
         status: SessionStatus::New,
         cwd: get_str(event, "cwd"),
@@ -664,7 +745,14 @@ fn handle_session_start(event: &serde_json::Value) {
         agent_name,
         lead_session_id,
         custom_title: get_opt_str(event, "customTitle"),
+        git_repo_root: None,
+        git_branch: None,
+        git_is_worktree: false,
     };
+    let (repo_root, branch, is_wt) = get_git_info(&state.cwd);
+    state.git_repo_root = repo_root;
+    state.git_branch = branch;
+    state.git_is_worktree = is_wt;
     save_session(&state);
     log_activity(&session_id, "SessionStart", "");
 }
@@ -761,6 +849,13 @@ fn handle_stop(event: &serde_json::Value) {
     }
     if let Some(t) = custom_title {
         state.custom_title = Some(t);
+    }
+    // Refresh branch in case user checked out a different branch during the turn
+    if !state.cwd.is_empty() {
+        let (_, branch, _) = get_git_info(&state.cwd);
+        if let Some(b) = branch {
+            state.git_branch = Some(b);
+        }
     }
 
     save_session(&state);
@@ -970,6 +1065,9 @@ mod tests {
             agent_name: None,
             lead_session_id: None,
             custom_title: None,
+            git_repo_root: None,
+            git_branch: None,
+            git_is_worktree: false,
         };
         let json = serde_json::to_string_pretty(&state).unwrap();
         let parsed: SessionState = serde_json::from_str(&json).unwrap();

@@ -83,3 +83,6 @@ class SessionState(BaseModel):
     agent_name: str | None = None
     lead_session_id: str | None = None
     custom_title: str | None = None
+    git_repo_root: str | None = None
+    git_branch: str | None = None
+    git_is_worktree: bool = False

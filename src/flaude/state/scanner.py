@@ -14,6 +14,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 from flaude.constants import ACTIVITY_LOG, STALE_SESSION_TIMEOUT, utcnow
+from flaude.git import get_git_info
 from flaude.state.cleanup import _get_active_cwds
 from flaude.state.manager import StateManager
 from flaude.state.models import SessionState, SessionStatus
@@ -137,6 +138,7 @@ def scan_preexisting_sessions(mgr: StateManager) -> int:
             except (OSError, json.JSONDecodeError, KeyError):
                 pass
 
+        repo_root, branch, is_wt = get_git_info(cwd)
         state = SessionState(
             session_id=session_id,
             status=SessionStatus.IDLE,
@@ -148,12 +150,16 @@ def scan_preexisting_sessions(mgr: StateManager) -> int:
             team_name=team_name,
             agent_name=agent_name,
             lead_session_id=lead_session_id,
+            git_repo_root=repo_root,
+            git_branch=branch,
+            git_is_worktree=is_wt,
         )
         mgr.save_session(state)
         discovered += 1
 
     # Enrich existing sessions that lack team fields (backfill after upgrade)
     _backfill_team_fields(mgr)
+    _backfill_git_fields(mgr)
 
     return discovered
 
@@ -179,4 +185,18 @@ def _backfill_team_fields(mgr: StateManager) -> None:
             state.lead_session_id = config.get("leadSessionId")
         except (OSError, json.JSONDecodeError, KeyError):
             pass
+        mgr.save_session(state)
+
+
+def _backfill_git_fields(mgr: StateManager) -> None:
+    """One-time backfill: populate git fields for sessions missing them."""
+    for session_id, state in mgr.load_all_sessions().items():
+        if state.git_repo_root is not None or not state.cwd:
+            continue
+        repo_root, branch, is_wt = get_git_info(state.cwd)
+        if repo_root is None:
+            continue
+        state.git_repo_root = repo_root
+        state.git_branch = branch
+        state.git_is_worktree = is_wt
         mgr.save_session(state)
