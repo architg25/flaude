@@ -143,7 +143,8 @@ class FlaudeApp(App):
                     visible[sid] = s
 
         table = self.query_one(SessionTable)
-        table.update_sessions(visible, hidden_count=hidden_count)
+        any_named = any(s.custom_title for s in active.values())
+        table.update_sessions(visible, hidden_count=hidden_count, any_named=any_named)
         self.query_one(PermissionPanel).update_permissions(active)
         self._selected_id = table.get_selected_session_id()
 

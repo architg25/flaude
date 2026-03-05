@@ -65,6 +65,8 @@ class SessionDetail(Static):
         # ── Session ──
         lines.append(_section_header("SESSION"))
         lines.append(_kv("ID", state.session_id))
+        if state.custom_title:
+            lines.append(_kv("Name", state.custom_title))
         lines.append(_kv("Dir", state.cwd))
 
         # ── Team ──

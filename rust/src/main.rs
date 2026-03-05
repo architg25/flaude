@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -131,6 +131,8 @@ struct SessionState {
     agent_name: Option<String>,
     #[serde(default)]
     lead_session_id: Option<String>,
+    #[serde(default)]
+    custom_title: Option<String>,
 }
 
 fn default_permission_mode() -> String {
@@ -302,48 +304,59 @@ fn detect_terminal_from_env() -> Option<String> {
 // Transcript token parsing — mirrors dispatcher._get_usage_from_transcript()
 // ---------------------------------------------------------------------------
 
-fn get_usage_from_transcript(transcript_path: Option<&str>) -> (u64, Option<String>) {
+fn get_usage_from_transcript(transcript_path: Option<&str>) -> (u64, Option<String>, Option<String>) {
     let path_str = match transcript_path {
         Some(p) if !p.is_empty() => p,
-        _ => return (0, None),
+        _ => return (0, None, None),
     };
     let path = Path::new(path_str);
     if !path.exists() {
-        return (0, None);
+        return (0, None, None);
     }
 
     let mut file = match File::open(path) {
         Ok(f) => f,
-        Err(_) => return (0, None),
+        Err(_) => return (0, None, None),
     };
 
-    let size = match file.metadata() {
-        Ok(m) => m.len(),
-        Err(_) => return (0, None),
-    };
+    // Read entire file once. Transcripts are small enough that this is fine,
+    // and we need the full content for custom-title scanning anyway.
+    let mut all_bytes = Vec::new();
+    if file.read_to_end(&mut all_bytes).is_err() {
+        return (0, None, None);
+    }
+    let all_text = String::from_utf8_lossy(&all_bytes);
 
-    // Read last 10KB
-    let offset = if size > 10240 { size - 10240 } else { 0 };
-    if file.seek(SeekFrom::Start(offset)).is_err() {
-        return (0, None);
+    // Full-file scan for the most recent custom-title entry (/rename). These
+    // entries can appear anywhere in the transcript, so we can't use only the tail.
+    // Filter cheaply by checking for the literal "custom-title" before parsing.
+    let mut custom_title: Option<String> = None;
+    for line in all_text.lines() {
+        if !line.contains("custom-title") {
+            continue;
+        }
+        if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
+            if entry.get("type").and_then(|v| v.as_str()) == Some("custom-title") {
+                custom_title = entry.get("customTitle").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(|s| s.to_string());
+            }
+        }
     }
 
-    let mut buf = Vec::new();
-    if file.read_to_end(&mut buf).is_err() {
-        return (0, None);
-    }
-
-    let tail = String::from_utf8_lossy(&buf);
-
+    // Tail slice (last 10KB) for tokens and model
+    let tail_start = if all_bytes.len() > 10240 { all_bytes.len() - 10240 } else { 0 };
+    let tail_cow = String::from_utf8_lossy(&all_bytes[tail_start..]);
     // Discard partial first line when we seeked to mid-file
-    let tail = if offset > 0 {
-        match tail.find('\n') {
-            Some(idx) => &tail[idx + 1..],
-            None => &tail,
+    let tail: &str = if tail_start > 0 {
+        match tail_cow.find('\n') {
+            Some(idx) => &tail_cow[idx + 1..],
+            None => &tail_cow,
         }
     } else {
-        &tail
+        &tail_cow
     };
+
+    let mut tokens: u64 = 0;
+    let mut model: Option<String> = None;
 
     // Search backwards for the latest usage
     for line in tail.trim().lines().rev() {
@@ -362,18 +375,18 @@ fn get_usage_from_transcript(transcript_path: Option<&str>) -> (u64, Option<Stri
                         .get("cache_creation_input_tokens")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
-                    let tokens = cache_read + input + cache_creation;
-                    let model = msg
+                    tokens = cache_read + input + cache_creation;
+                    model = msg
                         .get("model")
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_string());
-                    return (tokens, model);
+                    break;
                 }
             }
         }
     }
 
-    (0, None)
+    (tokens, model, custom_title)
 }
 
 // ---------------------------------------------------------------------------
@@ -525,6 +538,7 @@ fn load_or_create(event: &serde_json::Value) -> SessionState {
             team_name: None,
             agent_name: None,
             lead_session_id: None,
+            custom_title: None,
         }
     });
 
@@ -543,6 +557,10 @@ fn load_or_create(event: &serde_json::Value) -> SessionState {
     }
     if let Some(pm) = get_opt_str(event, "permission_mode") {
         state.permission_mode = pm;
+    }
+    // Update custom_title if the event provides one — Claude Code sends it after /rename
+    if let Some(t) = get_opt_str(event, "customTitle") {
+        state.custom_title = Some(t);
     }
 
     state
@@ -619,6 +637,7 @@ fn handle_session_start(event: &serde_json::Value) {
         team_name,
         agent_name,
         lead_session_id,
+        custom_title: get_opt_str(event, "customTitle"),
     };
     save_session(&state);
     log_activity(&session_id, "SessionStart", "");
@@ -706,10 +725,13 @@ fn handle_stop(event: &serde_json::Value) {
     state.last_event = "Stop".into();
     state.last_event_at = utcnow();
 
-    let (tokens, model) = get_usage_from_transcript(state.transcript_path.as_deref());
+    let (tokens, model, custom_title) = get_usage_from_transcript(state.transcript_path.as_deref());
     state.context_tokens = tokens;
     if let Some(m) = model {
         state.model = Some(m);
+    }
+    if let Some(t) = custom_title {
+        state.custom_title = Some(t);
     }
 
     save_session(&state);
@@ -918,6 +940,7 @@ mod tests {
             team_name: None,
             agent_name: None,
             lead_session_id: None,
+            custom_title: None,
         };
         let json = serde_json::to_string_pretty(&state).unwrap();
         let parsed: SessionState = serde_json::from_str(&json).unwrap();
@@ -993,16 +1016,32 @@ mod tests {
         )
         .unwrap();
 
-        let (tokens, model) = get_usage_from_transcript(Some(path.to_str().unwrap()));
+        let (tokens, model, custom_title) = get_usage_from_transcript(Some(path.to_str().unwrap()));
         assert_eq!(tokens, 650);
         assert_eq!(model, Some("claude-opus-4-6".into()));
+        assert_eq!(custom_title, None);
+    }
+
+    #[test]
+    fn test_transcript_parsing_custom_title() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("transcript.jsonl");
+        let mut f = File::create(&path).unwrap();
+
+        writeln!(f, r#"{{"type": "custom-title", "customTitle": "my-session", "sessionId": "abc"}}"#).unwrap();
+
+        let (tokens, model, custom_title) = get_usage_from_transcript(Some(path.to_str().unwrap()));
+        assert_eq!(tokens, 0);
+        assert_eq!(model, None);
+        assert_eq!(custom_title, Some("my-session".into()));
     }
 
     #[test]
     fn test_transcript_parsing_empty() {
-        let (tokens, model) = get_usage_from_transcript(None);
+        let (tokens, model, custom_title) = get_usage_from_transcript(None);
         assert_eq!(tokens, 0);
         assert_eq!(model, None);
+        assert_eq!(custom_title, None);
     }
 
     #[test]

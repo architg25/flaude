@@ -82,3 +82,4 @@ class SessionState(BaseModel):
     team_name: str | None = None
     agent_name: str | None = None
     lead_session_id: str | None = None
+    custom_title: str | None = None

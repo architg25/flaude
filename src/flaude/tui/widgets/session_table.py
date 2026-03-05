@@ -12,10 +12,29 @@ from flaude.formatting import format_uptime, format_compact_duration, format_tok
 from flaude.state.models import SessionState, SessionStatus, STATUS_INFO
 
 
+def _format_name(state: SessionState) -> Text:
+    """Return the display name for the Name column.
+
+    Custom titles (set via /rename) are shown as-is.
+    Sessions without a custom title show "[default]" (dim).
+    Text objects are used to prevent Rich markup interpretation.
+    """
+    if state.custom_title:
+        return Text(state.custom_title)
+    return Text("[default]", style="dim")
+
+
 def _build_row_data(
-    state: SessionState, now: datetime, css: dict, tree_prefix: str = ""
-) -> tuple[Text, str, str, str, str, Text, str]:
-    """Build the 7 cell values for a session row."""
+    state: SessionState,
+    now: datetime,
+    css: dict,
+    tree_prefix: str = "",
+    include_name: bool = False,
+) -> tuple:
+    """Build the cell values for a session row.
+
+    Returns 8 cells when include_name is True, 7 otherwise.
+    """
     info = STATUS_INFO[state.status]
     color = css.get(info.theme_var, "")
     style = f"{color} bold" if info.bold else color
@@ -32,6 +51,9 @@ def _build_row_data(
     mode = state.permission_mode or "default"
     context = _format_context(state.context_tokens, state.model, css)
     label = state.agent_name if state.agent_name else state.session_id[:8]
+    if include_name:
+        name = _format_name(state)
+        return status_text, name, label, project[:20], term, mode, context, uptime
     return status_text, label, project[:20], term, mode, context, uptime
 
 
@@ -96,14 +118,32 @@ class SessionTable(DataTable):
 
     def on_mount(self) -> None:
         self.cursor_type = "row"
+        self._has_name_col = False
         self._col_keys = self.add_columns(
             "Status", "Session", "Project", "Terminal", "Mode", "Context", "Uptime"
         )
         self._last_order: list[str] = []
         self.border_title = "Sessions"
 
+    def _rebuild_columns(self, include_name: bool) -> None:
+        """Clear and re-add columns when Name column visibility changes."""
+        self.clear(columns=True)
+        self._last_order = []
+        self._has_name_col = include_name
+        if include_name:
+            self._col_keys = self.add_columns(
+                "Status", "Name", "Session", "Project", "Terminal", "Mode", "Context", "Uptime"
+            )
+        else:
+            self._col_keys = self.add_columns(
+                "Status", "Session", "Project", "Terminal", "Mode", "Context", "Uptime"
+            )
+
     def update_sessions(
-        self, sessions: dict[str, SessionState], hidden_count: int = 0
+        self,
+        sessions: dict[str, SessionState],
+        hidden_count: int = 0,
+        any_named: bool = False,
     ) -> None:
         selected_key = self.get_selected_session_id()
 
@@ -127,6 +167,10 @@ class SessionTable(DataTable):
                 )
             return
 
+        should_have_name = any_named or any(s.custom_title for s in sessions.values())
+        if should_have_name != self._has_name_col:
+            self._rebuild_columns(should_have_name)
+
         sorted_sessions = _sort_sessions(sessions)
         new_order = [s.session_id for s in sorted_sessions]
         prefixes = _compute_tree_prefixes(sorted_sessions)
@@ -138,7 +182,8 @@ class SessionTable(DataTable):
             # Fast path: in-place cell updates (no DOM teardown)
             for state in sorted_sessions:
                 cells = _build_row_data(
-                    state, now, css, prefixes.get(state.session_id, "")
+                    state, now, css, prefixes.get(state.session_id, ""),
+                    include_name=self._has_name_col,
                 )
                 for col_key, value in zip(self._col_keys, cells):
                     self.update_cell(state.session_id, col_key, value)
@@ -147,7 +192,8 @@ class SessionTable(DataTable):
             self.clear()
             for state in sorted_sessions:
                 cells = _build_row_data(
-                    state, now, css, prefixes.get(state.session_id, "")
+                    state, now, css, prefixes.get(state.session_id, ""),
+                    include_name=self._has_name_col,
                 )
                 self.add_row(*cells, key=state.session_id)
             self._last_order = new_order

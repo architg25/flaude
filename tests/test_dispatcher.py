@@ -155,10 +155,10 @@ class TestDetectTerminal:
 
 class TestGetUsageFromTranscript:
     def test_none_path(self):
-        assert _get_usage_from_transcript(None) == (0, None)
+        assert _get_usage_from_transcript(None) == (0, None, None)
 
     def test_missing_file(self, tmp_path):
-        assert _get_usage_from_transcript(str(tmp_path / "nope.jsonl")) == (0, None)
+        assert _get_usage_from_transcript(str(tmp_path / "nope.jsonl")) == (0, None, None)
 
     def test_valid_usage(self, tmp_path):
         transcript = tmp_path / "transcript.jsonl"
@@ -173,14 +173,15 @@ class TestGetUsageFromTranscript:
             }
         }
         transcript.write_text(json.dumps(entry) + "\n")
-        tokens, model = _get_usage_from_transcript(str(transcript))
+        tokens, model, custom_title = _get_usage_from_transcript(str(transcript))
         assert tokens == 6200
         assert model == "claude-sonnet-4-20250514"
+        assert custom_title is None
 
     def test_no_usage_entries(self, tmp_path):
         transcript = tmp_path / "transcript.jsonl"
         transcript.write_text(json.dumps({"type": "text"}) + "\n")
-        assert _get_usage_from_transcript(str(transcript)) == (0, None)
+        assert _get_usage_from_transcript(str(transcript)) == (0, None, None)
 
     def test_corrupt_lines_skipped(self, tmp_path):
         transcript = tmp_path / "transcript.jsonl"
@@ -196,9 +197,10 @@ class TestGetUsageFromTranscript:
         }
         lines = ["not json at all", json.dumps(good)]
         transcript.write_text("\n".join(lines) + "\n")
-        tokens, model = _get_usage_from_transcript(str(transcript))
+        tokens, model, custom_title = _get_usage_from_transcript(str(transcript))
         assert tokens == 500
         assert model == "opus"
+        assert custom_title is None
 
     def test_takes_latest_usage(self, tmp_path):
         """When multiple usage entries exist, the last one wins."""
@@ -224,9 +226,27 @@ class TestGetUsageFromTranscript:
             }
         }
         transcript.write_text(json.dumps(old) + "\n" + json.dumps(new) + "\n")
-        tokens, model = _get_usage_from_transcript(str(transcript))
+        tokens, model, custom_title = _get_usage_from_transcript(str(transcript))
         assert tokens == 999
         assert model == "new-model"
+        assert custom_title is None
+
+    def test_reads_custom_title_from_rename_entry(self, tmp_path):
+        """/rename writes a custom-title entry."""
+        transcript = tmp_path / "transcript.jsonl"
+        rename_entry = {"type": "custom-title", "customTitle": "my-session", "sessionId": "abc"}
+        transcript.write_text(json.dumps(rename_entry) + "\n")
+        tokens, model, custom_title = _get_usage_from_transcript(str(transcript))
+        assert custom_title == "my-session"
+
+    def test_latest_custom_title_wins(self, tmp_path):
+        """When /rename is called multiple times, the last title wins."""
+        transcript = tmp_path / "transcript.jsonl"
+        first_rename = {"type": "custom-title", "customTitle": "first-name", "sessionId": "abc"}
+        second_rename = {"type": "custom-title", "customTitle": "final-name", "sessionId": "abc"}
+        transcript.write_text(json.dumps(first_rename) + "\n" + json.dumps(second_rename) + "\n")
+        tokens, model, custom_title = _get_usage_from_transcript(str(transcript))
+        assert custom_title == "final-name"
 
 
 # ---------------------------------------------------------------------------
@@ -377,6 +397,19 @@ class TestHandleStop:
         state = mgr.load_session("s6")
         assert state.last_turn_duration >= 44  # allow for clock skew
         assert state.turn_started_at is None
+
+
+    def test_updates_custom_title_from_transcript(self, mgr, tmp_path):
+        transcript = tmp_path / "session.jsonl"
+        rename_entry = {"type": "custom-title", "customTitle": "my-session", "sessionId": "ct-sess"}
+        transcript.write_text(json.dumps(rename_entry) + "\n")
+
+        state = make_state("ct-sess", transcript_path=str(transcript))
+        mgr.save_session(state)
+
+        _handle_stop({"session_id": "ct-sess", "cwd": "/tmp"}, mgr)
+        state = mgr.load_session("ct-sess")
+        assert state.custom_title == "my-session"
 
 
 class TestHandlePermissionRequest:

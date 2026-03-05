@@ -125,14 +125,38 @@ def _detect_terminal_from_env() -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _get_usage_from_transcript(transcript_path: str | None) -> tuple[int, str | None]:
-    """Read the latest token usage and model from the transcript JSONL."""
+def _get_usage_from_transcript(
+    transcript_path: str | None,
+) -> tuple[int, str | None, str | None]:
+    """Read the latest token usage, model, and custom title from the transcript JSONL.
+
+    Tokens and model are read from the tail (last 10KB) for efficiency.
+    Custom title is read with a full-file scan because /rename can happen at any
+    point in the session and custom-title entries don't appear near the tail for
+    long-running sessions. The scan is cheap: only lines containing the literal
+    string 'custom-title' are JSON-parsed.
+    """
     if not transcript_path:
-        return 0, None
+        return 0, None, None
     try:
         path = Path(transcript_path)
         if not path.exists():
-            return 0, None
+            return 0, None, None
+
+        # Full-file scan for the most recent custom-title entry
+        custom_title: str | None = None
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                if '"custom-title"' not in line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                    if entry.get("type") == "custom-title":
+                        custom_title = entry.get("customTitle") or None
+                except json.JSONDecodeError:
+                    continue
+
+        # Tail read for tokens and model
         # Read last 10KB to find the most recent usage entry
         size = path.stat().st_size
         with open(path, "rb") as f:
@@ -143,6 +167,7 @@ def _get_usage_from_transcript(transcript_path: str | None) -> tuple[int, str | 
             first_nl = tail.find("\n")
             if first_nl != -1:
                 tail = tail[first_nl + 1 :]
+        tokens, model = 0, None
         # Search backwards for the latest usage
         for line in reversed(tail.strip().splitlines()):
             try:
@@ -156,12 +181,12 @@ def _get_usage_from_transcript(transcript_path: str | None) -> tuple[int, str | 
                         + usage.get("cache_creation_input_tokens", 0)
                     )
                     model = msg.get("model")
-                    return tokens, model
+                    break
             except (json.JSONDecodeError, AttributeError):
                 continue
     except (OSError, ValueError):
-        pass
-    return 0, None
+        return 0, None, None
+    return tokens, model, custom_title
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +226,9 @@ def _load_or_create(event: dict, sm: StateManager) -> SessionState:
         state.team_name = event["teamName"]
         state.agent_name = event.get("agentName")
         state.lead_session_id = _read_lead_session_id(state.team_name)
+    # Update custom_title if the event provides one — Claude Code sends it after /rename
+    if event.get("customTitle"):
+        state.custom_title = event["customTitle"]
     return state
 
 
@@ -310,10 +338,12 @@ def _handle_stop(event: dict, sm: StateManager) -> None:
     state.turn_started_at = None
     state.last_event = "Stop"
     state.last_event_at = utcnow()
-    tokens, model = _get_usage_from_transcript(state.transcript_path)
+    tokens, model, custom_title = _get_usage_from_transcript(state.transcript_path)
     state.context_tokens = tokens
     if model:
         state.model = model
+    if custom_title:
+        state.custom_title = custom_title
     sm.save_session(state)
     _log(state.session_id, "Stop", "idle")
 
