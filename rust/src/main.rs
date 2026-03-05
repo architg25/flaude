@@ -306,7 +306,7 @@ fn summarize_tool(tool_name: &str, tool_input: &serde_json::Value) -> String {
     };
     match tool_name {
         "Bash" => trunc(&get_str("command"), 80),
-        "Edit" | "Write" | "Read" => basename(&get_str("file_path")),
+        "Edit" | "MultiEdit" | "Write" | "Read" => basename(&get_str("file_path")),
         "Grep" => trunc(&get_str("pattern"), 40),
         "Glob" => get_str("pattern"),
         "Task" => trunc(&get_str("prompt"), 60),
@@ -419,7 +419,7 @@ fn get_usage_from_transcript(
         Ok(m) => m.len(),
         Err(_) => return (0, None, custom_title),
     };
-    let offset = if size > 10240 { size - 10240 } else { 0 };
+    let offset = if size > 51200 { size - 51200 } else { 0 };
     if file.seek(SeekFrom::Start(offset)).is_err() {
         return (0, None, custom_title);
     }
@@ -665,7 +665,8 @@ fn load_or_create(event: &serde_json::Value) -> SessionState {
     // Backfill git fields for sessions created before worktree support
     if state.git_repo_root.is_none() && !state.cwd.is_empty() {
         let (repo_root, branch, is_wt) = get_git_info(&state.cwd);
-        state.git_repo_root = repo_root;
+        // Use empty string sentinel to avoid re-calling git on non-repo dirs
+        state.git_repo_root = Some(repo_root.unwrap_or_default());
         state.git_branch = branch;
         state.git_is_worktree = is_wt;
     }
@@ -750,7 +751,7 @@ fn handle_session_start(event: &serde_json::Value) {
         git_is_worktree: false,
     };
     let (repo_root, branch, is_wt) = get_git_info(&state.cwd);
-    state.git_repo_root = repo_root;
+    state.git_repo_root = Some(repo_root.unwrap_or_default());
     state.git_branch = branch;
     state.git_is_worktree = is_wt;
     save_session(&state);

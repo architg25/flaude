@@ -15,6 +15,7 @@ from pathlib import Path
 
 from flaude.constants import ACTIVITY_LOG, STALE_SESSION_TIMEOUT, utcnow
 from flaude.git import get_git_info
+from flaude.hooks.teams import read_lead_session_id
 from flaude.state.cleanup import _get_active_cwds
 from flaude.state.manager import StateManager
 from flaude.state.models import SessionState, SessionStatus
@@ -127,16 +128,7 @@ def scan_preexisting_sessions(mgr: StateManager) -> int:
         # Extract team metadata if present
         team_name = entry.get("teamName")
         agent_name = entry.get("agentName")
-        lead_session_id = None
-        if team_name:
-            try:
-                config_path = Path(
-                    f"~/.claude/teams/{team_name}/config.json"
-                ).expanduser()
-                config = json.loads(config_path.read_text(encoding="utf-8"))
-                lead_session_id = config.get("leadSessionId")
-            except (OSError, json.JSONDecodeError, KeyError):
-                pass
+        lead_session_id = read_lead_session_id(team_name) if team_name else None
 
         repo_root, branch, is_wt = get_git_info(cwd)
         state = SessionState(
@@ -150,7 +142,7 @@ def scan_preexisting_sessions(mgr: StateManager) -> int:
             team_name=team_name,
             agent_name=agent_name,
             lead_session_id=lead_session_id,
-            git_repo_root=repo_root,
+            git_repo_root=repo_root or "",
             git_branch=branch,
             git_is_worktree=is_wt,
         )
@@ -179,12 +171,7 @@ def _backfill_team_fields(mgr: StateManager) -> None:
             continue
         state.team_name = team_name
         state.agent_name = entry.get("agentName")
-        try:
-            config_path = Path(f"~/.claude/teams/{team_name}/config.json").expanduser()
-            config = json.loads(config_path.read_text(encoding="utf-8"))
-            state.lead_session_id = config.get("leadSessionId")
-        except (OSError, json.JSONDecodeError, KeyError):
-            pass
+        state.lead_session_id = read_lead_session_id(team_name)
         mgr.save_session(state)
 
 

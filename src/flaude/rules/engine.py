@@ -19,6 +19,15 @@ class RulesEngine:
     def __init__(self, rules: list[dict], defaults: dict | None = None):
         self.rules = rules
         self.defaults = defaults or {}
+        # Pre-compile regex patterns (keyed by raw pattern string)
+        self._compiled: dict[str, re.Pattern] = {}
+        for rule in rules:
+            for pattern in (rule.get("match") or {}).values():
+                if pattern not in self._compiled and "$CWD" not in pattern:
+                    try:
+                        self._compiled[pattern] = re.compile(pattern)
+                    except re.error:
+                        pass
 
     @classmethod
     def load(cls, path: Path | None = None) -> "RulesEngine":
@@ -60,10 +69,17 @@ class RulesEngine:
             return True
         for field, pattern in match_spec.items():
             value = str(tool_input.get(field, ""))
-            resolved_pattern = pattern.replace("$CWD", re.escape(cwd))
-            try:
-                if not re.search(resolved_pattern, value):
+            if "$CWD" in pattern:
+                resolved = pattern.replace("$CWD", re.escape(cwd))
+                try:
+                    if not re.search(resolved, value):
+                        return False
+                except re.error:
                     return False
-            except re.error:
-                return False
+            else:
+                compiled = self._compiled.get(pattern)
+                if compiled is None:
+                    return False
+                if not compiled.search(value):
+                    return False
         return True

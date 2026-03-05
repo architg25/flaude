@@ -23,6 +23,7 @@ from flaude.constants import (
 from flaude.git import get_git_info
 from flaude.rules.engine import RulesEngine
 from flaude.state.manager import StateManager
+from flaude.hooks.teams import read_lead_session_id
 from flaude.state.models import LastTool, SessionState, SessionStatus
 from flaude.tools import summarize_tool, trunc
 
@@ -161,9 +162,9 @@ def _get_usage_from_transcript(
         # Tail read for tokens, model, and title updates
         size = path.stat().st_size
         with open(path, "rb") as f:
-            f.seek(max(0, size - 10240))
+            f.seek(max(0, size - 51200))
             tail = f.read().decode("utf-8", errors="ignore")
-        if size > 10240:
+        if size > 51200:
             first_nl = tail.find("\n")
             if first_nl != -1:
                 tail = tail[first_nl + 1 :]
@@ -232,14 +233,15 @@ def _load_or_create(event: dict, sm: StateManager) -> SessionState:
     if not state.team_name and event.get("teamName"):
         state.team_name = event["teamName"]
         state.agent_name = event.get("agentName")
-        state.lead_session_id = _read_lead_session_id(state.team_name)
+        state.lead_session_id = read_lead_session_id(state.team_name)
     # Update custom_title if the event provides one — Claude Code sends it after /rename
     if event.get("customTitle"):
         state.custom_title = event["customTitle"]
-    # Backfill git fields for sessions created before worktree support
+    # Backfill git fields for sessions created before worktree support.
+    # Use empty string sentinel to avoid re-calling git on non-repo dirs.
     if state.git_repo_root is None and state.cwd:
         repo_root, branch, is_wt = get_git_info(state.cwd)
-        state.git_repo_root = repo_root
+        state.git_repo_root = repo_root or ""
         state.git_branch = branch
         state.git_is_worktree = is_wt
     return state
@@ -250,23 +252,13 @@ def _load_or_create(event: dict, sm: StateManager) -> SessionState:
 # ---------------------------------------------------------------------------
 
 
-def _read_lead_session_id(team_name: str) -> str | None:
-    """Read leadSessionId from the team config file."""
-    try:
-        config_path = Path(f"~/.claude/teams/{team_name}/config.json").expanduser()
-        config = json.loads(config_path.read_text(encoding="utf-8"))
-        return config.get("leadSessionId")
-    except (OSError, json.JSONDecodeError, KeyError):
-        return None
-
-
 def _handle_session_start(event: dict, sm: StateManager) -> None:
     session_id = event.get("session_id", "")
     now = utcnow()
 
     team_name = event.get("teamName")
     agent_name = event.get("agentName")
-    lead_session_id = _read_lead_session_id(team_name) if team_name else None
+    lead_session_id = read_lead_session_id(team_name) if team_name else None
 
     state = SessionState(
         session_id=session_id,
@@ -284,7 +276,7 @@ def _handle_session_start(event: dict, sm: StateManager) -> None:
         lead_session_id=lead_session_id,
     )
     repo_root, branch, is_wt = get_git_info(state.cwd)
-    state.git_repo_root = repo_root
+    state.git_repo_root = repo_root or ""
     state.git_branch = branch
     state.git_is_worktree = is_wt
     sm.save_session(state)

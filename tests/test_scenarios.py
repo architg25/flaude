@@ -549,7 +549,7 @@ class TestTeamSessionFlow:
         config.write_text(json.dumps({"leadSessionId": "lead-abc"}))
 
         with patch(
-            "flaude.hooks.dispatcher._read_lead_session_id",
+            "flaude.hooks.dispatcher.read_lead_session_id",
             return_value="lead-abc",
         ):
             _handle_session_start(_ev(teamName="alpha", agentName="worker-1"), mgr)
