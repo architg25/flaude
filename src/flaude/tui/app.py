@@ -30,7 +30,11 @@ from flaude.tui.screens.input_dialog import InputDialog
 from flaude.tui.screens.prompt_dialog import PromptDialog
 from flaude.tui.screens.help_dialog import HelpDialog
 from flaude.tui.screens.settings_panel import SettingsPanel
-from flaude.tui.widgets.session_table import SessionTable, REPO_HEADER_PREFIX
+from flaude.tui.widgets.session_table import (
+    SessionTable,
+    REPO_HEADER_PREFIX,
+    GROUP_HEADER_PREFIX,
+)
 from flaude.tui.widgets.session_detail import SessionDetail
 from flaude.tui.widgets.permission_panel import PermissionPanel
 from flaude.tui.widgets.activity_log import ActivityLog
@@ -53,6 +57,7 @@ class FlaudeApp(App):
             "s", "toggle_notifications", "Notif Toggle/Settings", key_display="s/S"
         ),
         Binding("S", "settings", "Settings", show=False),
+        Binding("G", "assign_group", "Assign Group", show=False),
         Binding("h", "toggle_hidden", "Show Hidden"),
         Binding("t", "change_theme", "Theme"),
         Binding("question_mark", "help", "Help"),
@@ -154,6 +159,8 @@ class FlaudeApp(App):
             hidden_count=hidden_count,
             any_named=any_named,
             group_names=self._config.get("group_names"),
+            auto_group=self._config.get("auto_group", True),
+            session_groups=self._config.get("session_groups"),
         )
         self.query_one(PermissionPanel).update_permissions(active)
         self._selected_id = table.get_selected_session_id()
@@ -177,8 +184,13 @@ class FlaudeApp(App):
 
         detail = self.query_one(SessionDetail)
         group_names = self._config.get("group_names")
+        session_groups = self._config.get("session_groups")
         if selected_id and selected_id in active:
-            detail.update_session(active[selected_id], group_names=group_names)
+            detail.update_session(
+                active[selected_id],
+                group_names=group_names,
+                session_groups=session_groups,
+            )
         else:
             detail.update_session(None)
 
@@ -200,12 +212,14 @@ class FlaudeApp(App):
         """Handle Enter: navigate to session, or rename group if on a header."""
         key = str(event.row_key.value) if event.row_key else ""
         if key.startswith(REPO_HEADER_PREFIX):
-            self._rename_group(key.removeprefix(REPO_HEADER_PREFIX))
+            self._rename_repo_group(key.removeprefix(REPO_HEADER_PREFIX))
+        elif key.startswith(GROUP_HEADER_PREFIX):
+            self._rename_manual_group(key.removeprefix(GROUP_HEADER_PREFIX))
         else:
             self.action_goto_session()
 
-    def _rename_group(self, repo_root: str) -> None:
-        """Open input dialog to rename a repo group."""
+    def _rename_repo_group(self, repo_root: str) -> None:
+        """Rename an auto-detected repo group."""
         group_names = self._config.get("group_names", {})
         current = group_names.get(repo_root) or Path(repo_root).name
         auto_name = Path(repo_root).name
@@ -221,6 +235,62 @@ class FlaudeApp(App):
                 groups[repo_root] = name
             if not groups:
                 self._config.pop("group_names", None)
+            save_config(self._config)
+            self._refresh_sessions()
+
+        self.push_screen(
+            InputDialog("Group name:", current, autocomplete=False), on_result
+        )
+
+    def _rename_manual_group(self, old_name: str) -> None:
+        """Rename a manual group — updates all sessions assigned to it."""
+
+        def on_result(name: str | None) -> None:
+            if name is None:
+                return
+            name = name.strip()
+            sg = self._config.get("session_groups", {})
+            if not name:
+                # Clear: ungroup all sessions in this group
+                to_remove = [sid for sid, g in sg.items() if g == old_name]
+                for sid in to_remove:
+                    del sg[sid]
+            elif name != old_name:
+                # Rename: update all sessions from old_name to new name
+                for sid in list(sg):
+                    if sg[sid] == old_name:
+                        sg[sid] = name
+            if not sg:
+                self._config.pop("session_groups", None)
+            save_config(self._config)
+            self._refresh_sessions()
+
+        self.push_screen(
+            InputDialog("Group name:", old_name, autocomplete=False), on_result
+        )
+
+    def action_assign_group(self) -> None:
+        """Assign the selected session to a manual group."""
+        table = self.query_one(SessionTable)
+        session_id = table.get_selected_session_id()
+        if not session_id:
+            self.notify("Select a session to assign", severity="warning")
+            return
+
+        sg = self._config.get("session_groups", {})
+        current = sg.get(session_id, "")
+
+        def on_result(name: str | None) -> None:
+            if name is None:
+                return
+            name = name.strip()
+            groups = self._config.setdefault("session_groups", {})
+            if name:
+                groups[session_id] = name
+            else:
+                groups.pop(session_id, None)
+            if not groups:
+                self._config.pop("session_groups", None)
             save_config(self._config)
             self._refresh_sessions()
 

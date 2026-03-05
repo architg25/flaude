@@ -35,6 +35,7 @@ class _SettingRow(NamedTuple):
 ROWS: list[_SettingRow] = [
     _SettingRow(_RowKind.HEADER, "Session"),
     _SettingRow(_RowKind.NUMBER, "Hide idle after (min)", ("soft_hide_minutes",), 30, min_val=1, max_val=STALE_SESSION_TIMEOUT // 60),
+    _SettingRow(_RowKind.TOGGLE, "Auto-group by repo",    ("auto_group",), True),
 
     _SettingRow(_RowKind.HEADER, "Notifications"),
     _SettingRow(_RowKind.TOGGLE, "Master enable",         ("notifications", "enabled"), False),

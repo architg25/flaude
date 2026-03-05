@@ -55,6 +55,10 @@ class HelpDialog(ModalScreen[None]):
             )
             yield Static("[bold]d[/]             Exit Session", classes="help-row")
             yield Static(
+                "[bold]G[/]             Assign Session to Group", classes="help-row"
+            )
+            yield Static("[bold]Enter[/] on group  Rename Group", classes="help-row")
+            yield Static(
                 "[bold]s[/]             Toggle Notifications", classes="help-row"
             )
             yield Static("[bold]S[/]             Settings", classes="help-row")

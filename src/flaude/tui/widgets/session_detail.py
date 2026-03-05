@@ -55,6 +55,7 @@ class SessionDetail(Static):
         self,
         state: SessionState | None,
         group_names: dict[str, str] | None = None,
+        session_groups: dict[str, str] | None = None,
     ) -> None:
         if state is None:
             self.update("[dim italic]  Select a session to view details[/]")
@@ -78,6 +79,9 @@ class SessionDetail(Static):
         if state.custom_title:
             lines.append(_kv("Name", state.custom_title))
         lines.append(_kv("Dir", state.cwd))
+        manual_group = (session_groups or {}).get(state.session_id)
+        if manual_group:
+            lines.append(_kv("Group", manual_group))
 
         # ── Git ──
         if state.git_repo_root:

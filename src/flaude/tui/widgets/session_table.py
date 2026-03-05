@@ -13,6 +13,7 @@ from flaude.state.models import SessionState, SessionStatus, STATUS_INFO
 
 
 REPO_HEADER_PREFIX = "__repo__"
+GROUP_HEADER_PREFIX = "__group__"
 
 
 def _repo_header_text(display: str) -> Text:
@@ -88,8 +89,26 @@ def _build_row_data(
     return status_text, label, project, term, mode, context, uptime
 
 
-def _sort_sessions(sessions: dict[str, SessionState]) -> list[SessionState]:
-    """Sort sessions: grouped by repo, sorted within each group by status/time.
+def _session_group_key(
+    s: SessionState,
+    auto_group: bool,
+    session_groups: dict[str, str] | None,
+) -> str | None:
+    """Return the group key for a session, or None if ungrouped."""
+    manual = (session_groups or {}).get(s.session_id)
+    if manual:
+        return f"{GROUP_HEADER_PREFIX}{manual}"
+    if auto_group and s.git_repo_root:
+        return f"{REPO_HEADER_PREFIX}{s.git_repo_root}"
+    return None
+
+
+def _sort_sessions(
+    sessions: dict[str, SessionState],
+    auto_group: bool = True,
+    session_groups: dict[str, str] | None = None,
+) -> list[SessionState]:
+    """Sort sessions: grouped by repo/manual group, sorted within each group.
 
     Groups are stable — status changes only reorder within a group, never
     cause a session to jump between groups.
@@ -106,38 +125,39 @@ def _sort_sessions(sessions: dict[str, SessionState]) -> list[SessionState]:
         else:
             standalone.append(s)
 
-    # Bucket standalone sessions by repo
-    repo_buckets: dict[str, list[SessionState]] = defaultdict(list)
+    # Bucket standalone sessions by group key
+    group_buckets: dict[str, list[SessionState]] = defaultdict(list)
     ungrouped: list[SessionState] = []
     for s in standalone:
-        if s.git_repo_root:
-            repo_buckets[s.git_repo_root].append(s)
+        key = _session_group_key(s, auto_group, session_groups)
+        if key:
+            group_buckets[key].append(s)
         else:
             ungrouped.append(s)
 
     # Sort within each bucket by status priority, then start time
     sort_key = lambda s: (STATUS_INFO[s.status].sort_priority, s.started_at)
     ungrouped.sort(key=sort_key)
-    for bucket in repo_buckets.values():
+    for bucket in group_buckets.values():
         bucket.sort(key=sort_key)
 
     # Stable group order: by earliest session start time in each group
-    ordered_repos = sorted(
-        repo_buckets, key=lambda r: min(s.started_at for s in repo_buckets[r])
+    ordered_groups = sorted(
+        group_buckets, key=lambda g: min(s.started_at for s in group_buckets[g])
     )
 
     # Sort team members
     for members in team_members.values():
         members.sort(key=lambda s: s.agent_name or "")
 
-    # Assemble: ungrouped first, then each repo group
+    # Assemble: ungrouped first, then each group
     result: list[SessionState] = []
     for s in ungrouped:
         result.append(s)
         if s.session_id in team_members:
             result.extend(team_members[s.session_id])
-    for repo in ordered_repos:
-        for s in repo_buckets[repo]:
+    for group in ordered_groups:
+        for s in group_buckets[group]:
             result.append(s)
             if s.session_id in team_members:
                 result.extend(team_members[s.session_id])
@@ -145,37 +165,42 @@ def _sort_sessions(sessions: dict[str, SessionState]) -> list[SessionState]:
     return result
 
 
-def _repo_display_names(
-    sorted_sessions: list[SessionState],
+def _group_display_names(
+    group_keys: set[str],
     group_names: dict[str, str] | None = None,
 ) -> dict[str, str]:
-    """Map repo root paths to display names, with user overrides."""
-    roots: set[str] = set()
-    for s in sorted_sessions:
-        if s.git_repo_root:
-            roots.add(s.git_repo_root)
-    if not roots:
-        return {}
-    # Apply user-configured names first
+    """Map group keys to display names.
+
+    Repo groups (``__repo__<path>``) get auto-named from the path with
+    disambiguation, overridden by *group_names*.  Manual groups
+    (``__group__<name>``) use the name directly.
+    """
     names: dict[str, str] = {}
+    repo_roots: set[str] = set()
+    for key in group_keys:
+        if key.startswith(GROUP_HEADER_PREFIX):
+            names[key] = key.removeprefix(GROUP_HEADER_PREFIX)
+        elif key.startswith(REPO_HEADER_PREFIX):
+            repo_roots.add(key.removeprefix(REPO_HEADER_PREFIX))
+
+    # Resolve repo display names with user overrides + disambiguation
     remaining: set[str] = set()
-    for root in roots:
+    for root in repo_roots:
         custom = (group_names or {}).get(root)
         if custom:
-            names[root] = custom
+            names[f"{REPO_HEADER_PREFIX}{root}"] = custom
         else:
             remaining.add(root)
-    # Auto-name the rest, disambiguating collisions
     name_to_roots: dict[str, list[str]] = defaultdict(list)
     for root in remaining:
         name_to_roots[Path(root).name].append(root)
     for name, paths in name_to_roots.items():
         if len(paths) == 1:
-            names[paths[0]] = name
+            names[f"{REPO_HEADER_PREFIX}{paths[0]}"] = name
         else:
             for p in paths:
                 parent = Path(p).parent.name
-                names[p] = f"{parent}/{name}"
+                names[f"{REPO_HEADER_PREFIX}{p}"] = f"{parent}/{name}"
     return names
 
 
@@ -243,6 +268,8 @@ class SessionTable(DataTable):
         hidden_count: int = 0,
         any_named: bool = False,
         group_names: dict[str, str] | None = None,
+        auto_group: bool = True,
+        session_groups: dict[str, str] | None = None,
     ) -> None:
         selected_key = self.get_selected_session_id()
 
@@ -270,20 +297,27 @@ class SessionTable(DataTable):
         if should_have_name != self._has_name_col:
             self._rebuild_columns(should_have_name)
 
-        sorted_sessions = _sort_sessions(sessions)
+        sorted_sessions = _sort_sessions(sessions, auto_group, session_groups)
         prefixes = _compute_tree_prefixes(sorted_sessions)
-        repo_names = _repo_display_names(sorted_sessions, group_names)
 
-        # Build ordered list of keys including repo header sentinels
-        new_order: list[str] = []
-        last_repo: str | None = None
+        # Collect group keys and compute display names
+        group_keys: set[str] = set()
         for s in sorted_sessions:
-            repo = s.git_repo_root
-            if repo and repo != last_repo:
-                new_order.append(f"{REPO_HEADER_PREFIX}{repo}")
-                last_repo = repo
-            elif not repo and last_repo is not None:
-                last_repo = None
+            key = _session_group_key(s, auto_group, session_groups)
+            if key:
+                group_keys.add(key)
+        display_names = _group_display_names(group_keys, group_names)
+
+        # Build ordered list of keys including group header sentinels
+        new_order: list[str] = []
+        last_group: str | None = None
+        for s in sorted_sessions:
+            group = _session_group_key(s, auto_group, session_groups)
+            if group and group != last_group:
+                new_order.append(group)
+                last_group = group
+            elif not group and last_group is not None:
+                last_group = None
             new_order.append(s.session_id)
 
         now = utcnow()
@@ -302,28 +336,25 @@ class SessionTable(DataTable):
                 )
                 for col_key, value in zip(self._col_keys, cells):
                     self.update_cell(state.session_id, col_key, value)
-            # Update header row labels (repo names may have changed)
+            # Update header row labels (names may have changed)
             for key in new_order:
-                if key.startswith(REPO_HEADER_PREFIX):
-                    repo = key.removeprefix(REPO_HEADER_PREFIX)
-                    display = repo_names.get(repo, Path(repo).name)
-                    header_text = _repo_header_text(display)
+                if key in display_names:
+                    header_text = _repo_header_text(display_names[key])
                     self.update_cell(key, self._col_keys[0], header_text)
         else:
             # Slow path: sessions added/removed/reordered — full rebuild
             self.clear()
-            last_repo = None
+            last_group = None
             for state in sorted_sessions:
-                repo = state.git_repo_root
-                if repo and repo != last_repo:
-                    header_key = f"{REPO_HEADER_PREFIX}{repo}"
-                    display = repo_names.get(repo, Path(repo).name)
+                group = _session_group_key(state, auto_group, session_groups)
+                if group and group != last_group:
+                    display = display_names.get(group, "?")
                     header_text = _repo_header_text(display)
                     empty_cells = [""] * (num_cols - 1)
-                    self.add_row(header_text, *empty_cells, key=header_key)
-                    last_repo = repo
-                elif not repo and last_repo is not None:
-                    last_repo = None
+                    self.add_row(header_text, *empty_cells, key=group)
+                    last_group = group
+                elif not group and last_group is not None:
+                    last_group = None
                 cells = _build_row_data(
                     state,
                     now,
@@ -355,21 +386,24 @@ class SessionTable(DataTable):
         row_key, _ = self.coordinate_to_cell_key(self.cursor_coordinate)
         return str(row_key.value) if row_key else None
 
+    def _is_header_key(self, key: str) -> bool:
+        return key.startswith(REPO_HEADER_PREFIX) or key.startswith(GROUP_HEADER_PREFIX)
+
     def get_selected_session_id(self) -> str | None:
         """Return the session_id of the currently highlighted row.
 
-        Returns None for repo header rows.
+        Returns None for group header rows.
         """
         key = self._get_cursor_row_key()
-        if not key or key.startswith(REPO_HEADER_PREFIX):
+        if not key or self._is_header_key(key):
             return None
         return key
 
-    def get_selected_repo_root(self) -> str | None:
-        """Return the repo root if cursor is on a group header row."""
+    def get_selected_header_key(self) -> str | None:
+        """Return the full header key if cursor is on a group header row."""
         key = self._get_cursor_row_key()
-        if key and key.startswith(REPO_HEADER_PREFIX):
-            return key.removeprefix(REPO_HEADER_PREFIX)
+        if key and self._is_header_key(key):
+            return key
         return None
 
 
