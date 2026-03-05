@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -304,7 +304,10 @@ fn detect_terminal_from_env() -> Option<String> {
 // Transcript token parsing — mirrors dispatcher._get_usage_from_transcript()
 // ---------------------------------------------------------------------------
 
-fn get_usage_from_transcript(transcript_path: Option<&str>) -> (u64, Option<String>, Option<String>) {
+fn get_usage_from_transcript(
+    transcript_path: Option<&str>,
+    existing_custom_title: Option<&str>,
+) -> (u64, Option<String>, Option<String>) {
     let path_str = match transcript_path {
         Some(p) if !p.is_empty() => p,
         _ => return (0, None, None),
@@ -314,39 +317,47 @@ fn get_usage_from_transcript(transcript_path: Option<&str>) -> (u64, Option<Stri
         return (0, None, None);
     }
 
-    let mut file = match File::open(path) {
-        Ok(f) => f,
-        Err(_) => return (0, None, None),
-    };
-
-    // Read entire file once. Transcripts are small enough that this is fine,
-    // and we need the full content for custom-title scanning anyway.
-    let mut all_bytes = Vec::new();
-    if file.read_to_end(&mut all_bytes).is_err() {
-        return (0, None, None);
-    }
-    let all_text = String::from_utf8_lossy(&all_bytes);
-
-    // Full-file scan for the most recent custom-title entry (/rename). These
-    // entries can appear anywhere in the transcript, so we can't use only the tail.
-    // Filter cheaply by checking for the literal "custom-title" before parsing.
-    let mut custom_title: Option<String> = None;
-    for line in all_text.lines() {
-        if !line.contains("custom-title") {
-            continue;
-        }
-        if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
-            if entry.get("type").and_then(|v| v.as_str()) == Some("custom-title") {
-                custom_title = entry.get("customTitle").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(|s| s.to_string());
+    // When no cached title, do a full-file scan for custom-title entries.
+    // Otherwise skip — we'll check the tail below for re-renames.
+    let mut custom_title: Option<String> = existing_custom_title.map(|s| s.to_string());
+    if existing_custom_title.is_none() {
+        if let Ok(content) = fs::read_to_string(path) {
+            for line in content.lines() {
+                if !line.contains("custom-title") {
+                    continue;
+                }
+                if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
+                    if entry.get("type").and_then(|v| v.as_str()) == Some("custom-title") {
+                        custom_title = entry
+                            .get("customTitle")
+                            .and_then(|v| v.as_str())
+                            .filter(|s| !s.is_empty())
+                            .map(|s| s.to_string());
+                    }
+                }
             }
         }
     }
 
-    // Tail slice (last 10KB) for tokens and model
-    let tail_start = if all_bytes.len() > 10240 { all_bytes.len() - 10240 } else { 0 };
-    let tail_cow = String::from_utf8_lossy(&all_bytes[tail_start..]);
-    // Discard partial first line when we seeked to mid-file
-    let tail: &str = if tail_start > 0 {
+    // Tail read (last 10KB) for tokens, model, and title updates
+    let mut file = match File::open(path) {
+        Ok(f) => f,
+        Err(_) => return (0, None, custom_title),
+    };
+    let size = match file.metadata() {
+        Ok(m) => m.len(),
+        Err(_) => return (0, None, custom_title),
+    };
+    let offset = if size > 10240 { size - 10240 } else { 0 };
+    if file.seek(SeekFrom::Start(offset)).is_err() {
+        return (0, None, custom_title);
+    }
+    let mut buf = Vec::new();
+    if file.read_to_end(&mut buf).is_err() {
+        return (0, None, custom_title);
+    }
+    let tail_cow = String::from_utf8_lossy(&buf);
+    let tail: &str = if offset > 0 {
         match tail_cow.find('\n') {
             Some(idx) => &tail_cow[idx + 1..],
             None => &tail_cow,
@@ -357,9 +368,24 @@ fn get_usage_from_transcript(transcript_path: Option<&str>) -> (u64, Option<Stri
 
     let mut tokens: u64 = 0;
     let mut model: Option<String> = None;
+    let mut found_title_in_tail = false;
 
-    // Search backwards for the latest usage
+    // Search backwards for the latest usage and title updates
     for line in tail.trim().lines().rev() {
+        // Check for custom-title re-renames in the tail
+        if !found_title_in_tail && line.contains("custom-title") {
+            if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
+                if entry.get("type").and_then(|v| v.as_str()) == Some("custom-title") {
+                    custom_title = entry
+                        .get("customTitle")
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string());
+                    found_title_in_tail = true;
+                    continue;
+                }
+            }
+        }
         if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
             if let Some(msg) = entry.get("message") {
                 if let Some(usage) = msg.get("usage") {
@@ -725,7 +751,10 @@ fn handle_stop(event: &serde_json::Value) {
     state.last_event = "Stop".into();
     state.last_event_at = utcnow();
 
-    let (tokens, model, custom_title) = get_usage_from_transcript(state.transcript_path.as_deref());
+    let (tokens, model, custom_title) = get_usage_from_transcript(
+        state.transcript_path.as_deref(),
+        state.custom_title.as_deref(),
+    );
     state.context_tokens = tokens;
     if let Some(m) = model {
         state.model = Some(m);
@@ -1016,7 +1045,7 @@ mod tests {
         )
         .unwrap();
 
-        let (tokens, model, custom_title) = get_usage_from_transcript(Some(path.to_str().unwrap()));
+        let (tokens, model, custom_title) = get_usage_from_transcript(Some(path.to_str().unwrap()), None);
         assert_eq!(tokens, 650);
         assert_eq!(model, Some("claude-opus-4-6".into()));
         assert_eq!(custom_title, None);
@@ -1030,15 +1059,43 @@ mod tests {
 
         writeln!(f, r#"{{"type": "custom-title", "customTitle": "my-session", "sessionId": "abc"}}"#).unwrap();
 
-        let (tokens, model, custom_title) = get_usage_from_transcript(Some(path.to_str().unwrap()));
+        let (tokens, model, custom_title) = get_usage_from_transcript(Some(path.to_str().unwrap()), None);
         assert_eq!(tokens, 0);
         assert_eq!(model, None);
         assert_eq!(custom_title, Some("my-session".into()));
     }
 
     #[test]
+    fn test_transcript_cached_title_skips_full_scan() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("transcript.jsonl");
+        let mut f = File::create(&path).unwrap();
+
+        // Title entry exists but we pass a cached title — full scan is skipped,
+        // and since the entry is also in the tail it gets picked up there.
+        writeln!(f, r#"{{"type": "custom-title", "customTitle": "old-name", "sessionId": "abc"}}"#).unwrap();
+
+        let (_, _, custom_title) = get_usage_from_transcript(Some(path.to_str().unwrap()), Some("cached-name"));
+        // Tail contains the entry so it overwrites the cached value
+        assert_eq!(custom_title, Some("old-name".into()));
+    }
+
+    #[test]
+    fn test_transcript_cached_title_preserved_when_no_entry() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("transcript.jsonl");
+        let mut f = File::create(&path).unwrap();
+
+        // No custom-title entry — cached value should be preserved
+        writeln!(f, r#"{{"type": "text", "content": "hello"}}"#).unwrap();
+
+        let (_, _, custom_title) = get_usage_from_transcript(Some(path.to_str().unwrap()), Some("cached-name"));
+        assert_eq!(custom_title, Some("cached-name".into()));
+    }
+
+    #[test]
     fn test_transcript_parsing_empty() {
-        let (tokens, model, custom_title) = get_usage_from_transcript(None);
+        let (tokens, model, custom_title) = get_usage_from_transcript(None, None);
         assert_eq!(tokens, 0);
         assert_eq!(model, None);
         assert_eq!(custom_title, None);

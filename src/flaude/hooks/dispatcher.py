@@ -127,14 +127,14 @@ def _detect_terminal_from_env() -> str | None:
 
 def _get_usage_from_transcript(
     transcript_path: str | None,
+    existing_custom_title: str | None = None,
 ) -> tuple[int, str | None, str | None]:
     """Read the latest token usage, model, and custom title from the transcript JSONL.
 
-    Tokens and model are read from the tail (last 10KB) for efficiency.
-    Custom title is read with a full-file scan because /rename can happen at any
-    point in the session and custom-title entries don't appear near the tail for
-    long-running sessions. The scan is cheap: only lines containing the literal
-    string 'custom-title' are JSON-parsed.
+    Tokens and model are always read from the tail (last 10KB).
+    Custom title: if *existing_custom_title* is None a full-file scan is done
+    once; on subsequent calls the tail is checked for newer entries and the
+    cached value is returned if none are found.
     """
     if not transcript_path:
         return 0, None, None
@@ -143,34 +143,40 @@ def _get_usage_from_transcript(
         if not path.exists():
             return 0, None, None
 
-        # Full-file scan for the most recent custom-title entry
-        custom_title: str | None = None
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                if '"custom-title"' not in line:
-                    continue
-                try:
-                    entry = json.loads(line)
-                    if entry.get("type") == "custom-title":
-                        custom_title = entry.get("customTitle") or None
-                except json.JSONDecodeError:
-                    continue
+        # Full-file scan only when no cached title yet
+        custom_title = existing_custom_title
+        if existing_custom_title is None:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    if '"custom-title"' not in line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        if entry.get("type") == "custom-title":
+                            custom_title = entry.get("customTitle") or None
+                    except json.JSONDecodeError:
+                        continue
 
-        # Tail read for tokens and model
-        # Read last 10KB to find the most recent usage entry
+        # Tail read for tokens, model, and title updates
         size = path.stat().st_size
         with open(path, "rb") as f:
             f.seek(max(0, size - 10240))
             tail = f.read().decode("utf-8", errors="ignore")
-        # Discard partial first line when we seeked to mid-file
         if size > 10240:
             first_nl = tail.find("\n")
             if first_nl != -1:
                 tail = tail[first_nl + 1 :]
         tokens, model = 0, None
-        # Search backwards for the latest usage
+        found_title_in_tail = False
         for line in reversed(tail.strip().splitlines()):
             try:
+                # Check for custom-title updates in tail (re-renames)
+                if not found_title_in_tail and '"custom-title"' in line:
+                    entry = json.loads(line)
+                    if entry.get("type") == "custom-title":
+                        custom_title = entry.get("customTitle") or None
+                        found_title_in_tail = True
+                        continue
                 entry = json.loads(line)
                 msg = entry.get("message", {})
                 usage = msg.get("usage")
@@ -338,7 +344,9 @@ def _handle_stop(event: dict, sm: StateManager) -> None:
     state.turn_started_at = None
     state.last_event = "Stop"
     state.last_event_at = utcnow()
-    tokens, model, custom_title = _get_usage_from_transcript(state.transcript_path)
+    tokens, model, custom_title = _get_usage_from_transcript(
+        state.transcript_path, existing_custom_title=state.custom_title
+    )
     state.context_tokens = tokens
     if model:
         state.model = model

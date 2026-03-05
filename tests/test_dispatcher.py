@@ -158,7 +158,11 @@ class TestGetUsageFromTranscript:
         assert _get_usage_from_transcript(None) == (0, None, None)
 
     def test_missing_file(self, tmp_path):
-        assert _get_usage_from_transcript(str(tmp_path / "nope.jsonl")) == (0, None, None)
+        assert _get_usage_from_transcript(str(tmp_path / "nope.jsonl")) == (
+            0,
+            None,
+            None,
+        )
 
     def test_valid_usage(self, tmp_path):
         transcript = tmp_path / "transcript.jsonl"
@@ -234,7 +238,11 @@ class TestGetUsageFromTranscript:
     def test_reads_custom_title_from_rename_entry(self, tmp_path):
         """/rename writes a custom-title entry."""
         transcript = tmp_path / "transcript.jsonl"
-        rename_entry = {"type": "custom-title", "customTitle": "my-session", "sessionId": "abc"}
+        rename_entry = {
+            "type": "custom-title",
+            "customTitle": "my-session",
+            "sessionId": "abc",
+        }
         transcript.write_text(json.dumps(rename_entry) + "\n")
         tokens, model, custom_title = _get_usage_from_transcript(str(transcript))
         assert custom_title == "my-session"
@@ -242,11 +250,45 @@ class TestGetUsageFromTranscript:
     def test_latest_custom_title_wins(self, tmp_path):
         """When /rename is called multiple times, the last title wins."""
         transcript = tmp_path / "transcript.jsonl"
-        first_rename = {"type": "custom-title", "customTitle": "first-name", "sessionId": "abc"}
-        second_rename = {"type": "custom-title", "customTitle": "final-name", "sessionId": "abc"}
-        transcript.write_text(json.dumps(first_rename) + "\n" + json.dumps(second_rename) + "\n")
+        first_rename = {
+            "type": "custom-title",
+            "customTitle": "first-name",
+            "sessionId": "abc",
+        }
+        second_rename = {
+            "type": "custom-title",
+            "customTitle": "final-name",
+            "sessionId": "abc",
+        }
+        transcript.write_text(
+            json.dumps(first_rename) + "\n" + json.dumps(second_rename) + "\n"
+        )
         tokens, model, custom_title = _get_usage_from_transcript(str(transcript))
         assert custom_title == "final-name"
+
+    def test_cached_title_skips_full_scan(self, tmp_path):
+        """When a cached title exists, full scan is skipped; tail entry wins."""
+        transcript = tmp_path / "transcript.jsonl"
+        rename_entry = {
+            "type": "custom-title",
+            "customTitle": "new-name",
+            "sessionId": "abc",
+        }
+        transcript.write_text(json.dumps(rename_entry) + "\n")
+        _, _, custom_title = _get_usage_from_transcript(
+            str(transcript), existing_custom_title="old-name"
+        )
+        # Entry is in the tail, so it overwrites the cached value
+        assert custom_title == "new-name"
+
+    def test_cached_title_preserved_when_no_entry(self, tmp_path):
+        """When no custom-title entry exists, cached value is preserved."""
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text(json.dumps({"type": "text"}) + "\n")
+        _, _, custom_title = _get_usage_from_transcript(
+            str(transcript), existing_custom_title="cached-name"
+        )
+        assert custom_title == "cached-name"
 
 
 # ---------------------------------------------------------------------------
@@ -398,10 +440,13 @@ class TestHandleStop:
         assert state.last_turn_duration >= 44  # allow for clock skew
         assert state.turn_started_at is None
 
-
     def test_updates_custom_title_from_transcript(self, mgr, tmp_path):
         transcript = tmp_path / "session.jsonl"
-        rename_entry = {"type": "custom-title", "customTitle": "my-session", "sessionId": "ct-sess"}
+        rename_entry = {
+            "type": "custom-title",
+            "customTitle": "my-session",
+            "sessionId": "ct-sess",
+        }
         transcript.write_text(json.dumps(rename_entry) + "\n")
 
         state = make_state("ct-sess", transcript_path=str(transcript))
