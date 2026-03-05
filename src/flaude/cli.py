@@ -72,6 +72,17 @@ def _save_settings(settings: dict) -> None:
     atomic_write(CLAUDE_SETTINGS_PATH, buf.getvalue())
 
 
+def _hooks_installed() -> bool:
+    """Check if flaude hooks are registered in Claude settings."""
+    settings = _load_settings()
+    hooks = settings.get("hooks", {})
+    for event_hooks in hooks.values():
+        for entry in event_hooks:
+            if _is_flaude_hook(entry):
+                return True
+    return False
+
+
 def _is_flaude_hook(entry: dict) -> bool:
     """Check if a hook entry belongs to flaude (Rust binary or Python fallback)."""
     for hook in entry.get("hooks", []):
@@ -335,6 +346,11 @@ def cmd_uninstall(args: argparse.Namespace) -> None:
 
 def cmd_run(args: argparse.Namespace) -> None:
     """Launch the TUI dashboard."""
+    if not _hooks_installed():
+        print("First run detected — registering hooks...")
+        cmd_init(argparse.Namespace(dry_run=False))
+        print()
+
     ensure_dirs()
 
     # Overwrite process name from "python3.13" to "Flaude".
