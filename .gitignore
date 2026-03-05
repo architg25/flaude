@@ -5,6 +5,9 @@ dist/
 build/
 .pytest_cache/
 
+# Auto-generated version file
+src/flaude/_version.py
+
 # Rust
 rust/target/
 src/flaude/bin/flaude-hook

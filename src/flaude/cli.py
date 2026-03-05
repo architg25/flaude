@@ -101,12 +101,31 @@ def _copy_default_rules() -> None:
     shutil.copy2(default_rules, RULES_PATH)
 
 
-_PIP_URL = "git+ssh://git@ghe.spotify.net/vibes/flaude.git"
-_PIP_URL_OLD = "git+ssh://git@ghe.spotify.net/architg/flaude.git"
+_ARTIFACTORY_INDEX = "https://artifactory.spotify.net/artifactory/api/pypi/pypi/simple/"
+_GIT_URL = "git+ssh://git@ghe.spotify.net/vibes/flaude.git"
+_GIT_URL_OLD = "git+ssh://git@ghe.spotify.net/architg/flaude.git"
+
+
+def _print_update_result(old_version: str) -> None:
+    """Print update result by comparing old version to freshly installed one."""
+    import subprocess
+
+    new_version = subprocess.run(
+        [sys.executable, "-c", "import flaude; print(flaude.__version__)"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    if new_version == old_version:
+        print(f"Already up to date ({old_version}).")
+    else:
+        print(f"Updated: {old_version} -> {new_version}")
+    print("\nRun 'flaude init' to re-register hooks if the hook binary was rebuilt.")
 
 
 def cmd_update(args: argparse.Namespace) -> None:
-    """Self-update flaude from the Git remote."""
+    """Self-update flaude from Artifactory or Git remote."""
+    import shutil
     import subprocess
 
     from flaude import __version__
@@ -114,33 +133,58 @@ def cmd_update(args: argparse.Namespace) -> None:
     print(f"Current version: {__version__}")
     print("Updating flaude...")
 
-    # Try new URL first, fall back to old (pre-transfer redirect)
-    for url in (_PIP_URL, _PIP_URL_OLD):
-        cmd = [sys.executable, "-m", "pip", "install", "--force-reinstall", url]
-        result = subprocess.run(cmd)
-        if result.returncode == 0:
-            break
-    else:
-        print(
-            "\nUpdate failed. The repository may have moved.\n"
-            "Try reinstalling:\n\n"
-            f"  pip install {_PIP_URL}\n",
-            file=sys.stderr,
+    # Strategy 1: uv from Artifactory (fastest — pre-built wheel)
+    uv = shutil.which("uv")
+    if uv:
+        result = subprocess.run(
+            [
+                uv,
+                "pip",
+                "install",
+                "--upgrade",
+                "flaude",
+                "--index-url",
+                _ARTIFACTORY_INDEX,
+            ]
         )
-        sys.exit(1)
+        if result.returncode == 0:
+            _print_update_result(__version__)
+            return
 
-    # Read new version from the freshly installed package (can't re-import)
-    new_version = subprocess.run(
-        [sys.executable, "-c", "import flaude; print(flaude.__version__)"],
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+    # Strategy 2: pip from Artifactory
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+            "flaude",
+            "--index-url",
+            _ARTIFACTORY_INDEX,
+        ]
+    )
+    if result.returncode == 0:
+        _print_update_result(__version__)
+        return
 
-    if new_version == __version__:
-        print(f"Already up to date ({__version__}).")
-    else:
-        print(f"Updated: {__version__} -> {new_version}")
-    print("\nRun 'flaude init' to re-register hooks if the hook binary was rebuilt.")
+    # Strategy 3: pip from git+ssh (fallback)
+    for url in (_GIT_URL, _GIT_URL_OLD):
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--force-reinstall", url]
+        )
+        if result.returncode == 0:
+            _print_update_result(__version__)
+            return
+
+    print(
+        "\nUpdate failed from all sources.\n"
+        "Try manually:\n\n"
+        f"  pip install flaude --index-url {_ARTIFACTORY_INDEX}\n"
+        f"  pip install {_GIT_URL}\n",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 
 def cmd_init(args: argparse.Namespace) -> None:

@@ -4,45 +4,17 @@ Checks at most once per 24 hours. Stores last-check timestamp and result
 in ~/.config/flaude/config.yaml under an ``update_check`` key.
 """
 
-import io
-import re
 import subprocess
-import tarfile
 from datetime import UTC, datetime
 
 from flaude import __version__
 
 _REMOTE = "git@ghe.spotify.net:vibes/flaude.git"
 _CHECK_INTERVAL_HOURS = 24
-_INIT_PATH = "src/flaude/__init__.py"
 
 
 def _version_tuple(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in v.split("."))
-
-
-def _parse_version(text: str) -> str | None:
-    match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', text)
-    return match.group(1) if match else None
-
-
-def _fetch_via_archive() -> str | None:
-    """Fetch remote version via ``git archive --remote`` (single file over SSH)."""
-    try:
-        result = subprocess.run(
-            ["git", "archive", "--remote", _REMOTE, "HEAD", _INIT_PATH],
-            capture_output=True,
-            timeout=10,
-        )
-        if result.returncode != 0:
-            return None
-        with tarfile.open(fileobj=io.BytesIO(result.stdout)) as tar:
-            member = tar.extractfile(_INIT_PATH)
-            if member is None:
-                return None
-            return _parse_version(member.read().decode("utf-8"))
-    except Exception:
-        return None
 
 
 def _fetch_via_tags() -> str | None:
@@ -71,8 +43,8 @@ def _fetch_via_tags() -> str | None:
 
 
 def fetch_remote_version() -> str | None:
-    """Try archive, then tags. Returns version string or None on any failure."""
-    return _fetch_via_archive() or _fetch_via_tags()
+    """Fetch latest version from remote git tags."""
+    return _fetch_via_tags()
 
 
 def check_for_update(config: dict) -> tuple[str, str] | None:

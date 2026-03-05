@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
@@ -18,7 +18,10 @@ dependencies = [
 flaude = "flaude.cli:main"
 
 [tool.hatch.version]
-path = "src/flaude/__init__.py"
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/flaude/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/flaude"]
@@ -36,3 +39,8 @@ dev = [
     "pytest",
     "pytest-asyncio",
 ]
+
+[[tool.uv.index]]
+name = "artifactory"
+url = "https://artifactory.spotify.net/artifactory/api/pypi/pypi/simple/"
+default = true

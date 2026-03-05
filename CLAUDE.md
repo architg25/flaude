@@ -6,41 +6,45 @@ Claude Code session manager — TUI dashboard for monitoring multiple concurrent
 
 - `src/flaude/` — Python package (TUI, CLI, hooks, state management)
 - `rust/` — Native hook dispatcher (optional, ~18x faster than Python fallback)
-- `scripts/` — Developer tooling (version bump)
 - `tests/` — pytest suite
 
 ## Version Management
 
-Version source of truth: `src/flaude/__init__.py` (`__version__`).
-`pyproject.toml` reads it dynamically via `[tool.hatch.version]`.
-`rust/Cargo.toml` version is cosmetic — kept in sync by the bump script.
+Version is auto-derived from git tags via `hatch-vcs` (backed by `setuptools-scm`).
+No manual version bumping needed — tag a commit and the version follows.
+
+- On tagged commits (e.g. `v0.14.0`): version = `0.14.0`
+- Between tags: version = `0.14.1.dev3+g<hash>` (auto-incremented)
+- `rust/Cargo.toml` version is cosmetic and no longer auto-synced.
 
 ## Release Workflow
 
 When the user asks to push, ship, or release changes:
 
-1. **Determine bump level** from the commits since last tag:
+1. **Determine version** from the commits since last tag:
    - **Patch** (X.Y.Z → X.Y.Z+1): Bug fixes, docs, refactors, typo fixes, dependency updates, test-only changes
-   - **Minor** (X.Y.Z → X.Y+1.0): New features, new CLI commands, new config options, behavioral changes, new files with new functionality
+   - **Minor** (X.Y.Z → X.Y+1.0): New features, new CLI commands, new config options, behavioral changes
    - **Major**: Never auto-bump. Only the user decides when to bump major.
 
-2. **Run the bump script**: `python scripts/bump_version.py <new-version>`
-
-3. **Update CHANGELOG.md**:
-   - **Patch**: Add bullet points to the existing `### X.Y.Z-1` entry (or create `### X.Y.Z` if the previous patch had a distinct theme)
-   - **Minor**: Create a new `## X.Y — <theme>` section at the top with a `### X.Y.0` entry
-   - **Major**: Same as minor but with a new major section
+2. **Update CHANGELOG.md**:
+   - **Patch**: Add bullet points to the existing entry (or create new one if distinct theme)
+   - **Minor**: Create a new `## X.Y — <theme>` section at the top
    - List notable changes as bullet points, derived from the commits since last tag
 
-4. **Commit, tag, and push**:
+3. **Commit, tag, and push**:
    ```
-   git commit -am 'Bump to <new-version>'
+   git commit -am 'Release <new-version>'
    git tag v<new-version>
    git push && git push --tags
    ```
 
+CI auto-publishes to Artifactory on push. Users can install via:
+
+- `uv pip install flaude` (from Artifactory)
+- `pip install git+ssh://git@ghe.spotify.net/vibes/flaude.git` (from source)
+
 Do NOT run this workflow on every commit. Only when explicitly asked to push/ship/release.
-Do NOT bump the version for documentation-only changes (README, docs/, CLAUDE.md, comments). Just commit and push directly.
+Do NOT create tags for documentation-only changes. Just commit and push directly.
 
 ## Hook Dispatcher Parity
 

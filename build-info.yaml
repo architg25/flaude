@@ -1,0 +1,9 @@
+version: 2
+useBuildIdentity: true
+
+template:
+  type: pythonLibrary
+  pythonLibrary:
+    publishDebian: False
+    tox:
+      version: 4

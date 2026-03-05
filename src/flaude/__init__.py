@@ -1,3 +1,6 @@
 """flaude — Claude Code session manager."""
 
-__version__ = "0.13.0"
+try:
+    from flaude._version import version as __version__
+except ImportError:
+    __version__ = "0.0.0+unknown"
