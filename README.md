@@ -24,6 +24,9 @@ The hook dispatcher ships as a native Rust binary for fast invocation (~14ms vs 
 - **Send prompt** -- type a prompt in flaude and send it to an idle Claude session via iTerm2's AppleScript API. Supports multi-line input (Shift+Enter for new lines, Enter to send). iTerm2 only
 - **Exit session** -- send `/exit` to an idle Claude session from the dashboard. Uses the same iTerm2 AppleScript injection as prompt sending, with a confirmation dialog. iTerm2 only
 - **Notification system** -- two categories: long turn completion (alert when a turn finishes after N minutes) and waiting on input (alert when a session needs permission, an answer, or plan review). Supports terminal bell, macOS notifications, and system sounds. Off by default, toggle with `s`, configure with `S`. Title bar shows 🔔/🔕 indicator. Note: Claude Code's built-in notifications have a [known delay bug](https://github.com/anthropics/claude-code/issues/5186) — flaude's hook-based notifications fire immediately when the event occurs, no delay
+- **Custom session titles** -- displays titles set via Claude Code's `/rename` command, extracted from the session transcript
+- **Git worktree support** -- sessions are auto-grouped by git repo, worktrees grouped with main repo, branch names displayed
+- **Configurable grouping** -- auto-group by repo (default on), manual group assignment via `G` key, group renaming via Enter on header row. Manual groups override auto-groups. Persisted in config via `session_groups`
 - **Activity log** -- tail session transcripts in real time with three verbosity modes (All / Summary / Tools)
 - **Session detail panel** -- sectioned view with session info, status, timing, context ratio, last prompt, pending questions with plan approval details, and team membership info for agent team members
 - **Monitor-only hooks** -- never blocks Claude Code; users approve permissions in their own terminal as usual
@@ -65,18 +68,19 @@ flaude update           # Self-update to latest version
 
 ### Key bindings
 
-| Key         | Action                                          |
-| ----------- | ----------------------------------------------- |
-| `Enter`/`g` | Navigate to the selected session's terminal     |
-| `n`         | Launch a new Claude session (directory picker)  |
-| `p`         | Send a prompt to the selected session (iTerm2)  |
-| `d`         | Exit the selected session (iTerm2)              |
-| `l`         | Cycle activity log mode (All / Summary / Tools) |
-| `s`/`S`     | Toggle notifications / notification settings    |
-| `t`         | Change theme (Textual theme picker with search) |
-| `h`         | Toggle display of hidden/stale sessions         |
-| `?`         | Help dialog                                     |
-| `q`         | Quit                                            |
+| Key         | Action                                                         |
+| ----------- | -------------------------------------------------------------- |
+| `Enter`/`g` | Navigate to session's terminal (or rename group on header row) |
+| `n`         | Launch a new Claude session (directory picker)                 |
+| `p`         | Send a prompt to the selected session (iTerm2)                 |
+| `d`         | Exit the selected session (iTerm2)                             |
+| `l`         | Cycle activity log mode (All / Summary / Tools)                |
+| `s`/`S`     | Toggle notifications / notification settings                   |
+| `t`         | Change theme (Textual theme picker with search)                |
+| `G`         | Assign session to a named group (manual grouping)              |
+| `h`         | Toggle display of hidden/stale sessions                        |
+| `?`         | Help dialog                                                    |
+| `q`         | Quit                                                           |
 
 ### Architecture
 

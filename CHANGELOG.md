@@ -2,6 +2,21 @@
 
 ## 0.12 — Git worktree support & repo grouping
 
+### 0.12.4
+
+- Configurable grouping — auto-group toggle and manual group assignment via `G` key
+- Rename groups via Enter on group header row
+- Auto-group toggle in settings panel
+
+### 0.12.3
+
+- Truncate long session names in Name column to 20 chars
+
+### 0.12.2
+
+- Smart truncation for Project column
+- Show worktree path in detail panel
+
 ### 0.12.1
 
 - Fix auto-hide NEW sessions after idle timeout

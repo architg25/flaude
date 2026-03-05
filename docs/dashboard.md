@@ -18,17 +18,35 @@ The TUI is split into a left pane and a right detail panel. Panels use rounded b
 
 ### Session table columns
 
-| Column   | Description                                                                                                                                             |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Status   | Theme-colored label with duration (e.g. `RUNNING 3m12s`, `IDLE 45s`, `PERMISSION 1m05s`, `INPUT`). Team members are prefixed with tree connectors (├/└) |
-| Session  | First 8 chars of the session ID, or agent name for team members (e.g. `researcher`)                                                                     |
-| Project  | Directory basename                                                                                                                                      |
-| Terminal | Detected terminal (iTerm2, Ghostty, Terminal, Warp, IntelliJ)                                                                                           |
-| Mode     | Permission mode (default, plan, acceptEdits, etc.)                                                                                                      |
-| Context  | Token count color-coded by model limit -- success (<50%), warning (50-80%), error (>80%)                                                                |
-| Uptime   | Time since session started                                                                                                                              |
+| Column   | Description                                                                                                                                                    |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status   | Theme-colored label with duration (e.g. `RUNNING 3m12s`, `IDLE 45s`, `PERMISSION 1m05s`, `INPUT`). Team members are prefixed with tree connectors (├/└)        |
+| Session  | First 8 chars of the session ID, or agent name for team members (e.g. `researcher`). Shows custom title if set via `/rename`. Long names truncated to 20 chars |
+| Project  | Directory basename with smart truncation. Detail panel shows full worktree path when applicable                                                                |
+| Terminal | Detected terminal (iTerm2, Ghostty, Terminal, Warp, IntelliJ)                                                                                                  |
+| Mode     | Permission mode (default, plan, acceptEdits, etc.)                                                                                                             |
+| Context  | Token count color-coded by model limit -- success (<50%), warning (50-80%), error (>80%)                                                                       |
+| Uptime   | Time since session started                                                                                                                                     |
 
 Context token limits are model-aware: 1M for Opus, 200K for Sonnet and Haiku. Colors adapt to the selected Textual theme.
+
+### Custom session titles
+
+Sessions display custom titles set via Claude Code's `/rename` command. The title is extracted from the session transcript and cached in state. Shown in the Session column instead of the truncated session ID.
+
+### Session grouping
+
+Sessions can be grouped in the table by repo or by manual assignment.
+
+**Auto-grouping (default: on)** -- When multiple sessions share the same git repo root, they are grouped under a header row showing the repo name. Git worktrees are detected and grouped with the main repo, with branch names displayed. Sorting happens within groups, not globally.
+
+**Manual grouping** -- Press `G` on a selected session to open a dialog and assign it to a named group. Manual group assignments override auto-grouping for that session. Press `Enter` on a group header row to rename the group.
+
+**Configuration:**
+
+- Auto-group can be toggled in the settings panel (`S`)
+- `auto_group` config key (default: `true`) controls whether repo-based grouping is active
+- `session_groups` config key stores manual group assignments, persisted across restarts
 
 ### New session launcher
 
@@ -150,7 +168,12 @@ The hook reads the session's transcript JSONL to extract the latest token usage 
 
 ## Configuration
 
-**`~/.config/flaude/config.yaml`** -- Persists theme, log mode, and notification settings across restarts. Created automatically.
+**`~/.config/flaude/config.yaml`** -- Persists theme, log mode, notification settings, grouping preferences, and manual group assignments across restarts. Created automatically.
+
+Notable config keys:
+
+- `auto_group` (default: `true`) -- Enable/disable automatic repo-based session grouping
+- `session_groups` -- Map of session IDs to manual group names
 
 ## Uninstalling
 
