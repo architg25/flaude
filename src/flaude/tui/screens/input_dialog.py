@@ -85,8 +85,10 @@ class InputDialog(ModalScreen[str | None]):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         value = event.value.strip()
-        # In autocomplete mode, empty = cancel. Otherwise, empty is a valid value.
-        self.dismiss(value if (value or not self._autocomplete) else None)
+        if not value and self._autocomplete:
+            self.dismiss(None)
+        else:
+            self.dismiss(value)
 
     def action_cancel(self) -> None:
         self.dismiss(None)

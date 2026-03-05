@@ -12,6 +12,13 @@ from flaude.formatting import format_uptime, format_compact_duration, format_tok
 from flaude.state.models import SessionState, SessionStatus, STATUS_INFO
 
 
+REPO_HEADER_PREFIX = "__repo__"
+
+
+def _repo_header_text(display: str) -> Text:
+    return Text(f"── {display} ──", style="bold dim")
+
+
 def _format_project(state: SessionState) -> str:
     """Format the Project column value.
 
@@ -261,7 +268,7 @@ class SessionTable(DataTable):
         for s in sorted_sessions:
             repo = s.git_repo_root
             if repo and repo != last_repo:
-                new_order.append(f"__repo__{repo}")
+                new_order.append(f"{REPO_HEADER_PREFIX}{repo}")
                 last_repo = repo
             elif not repo and last_repo is not None:
                 last_repo = None
@@ -285,10 +292,10 @@ class SessionTable(DataTable):
                     self.update_cell(state.session_id, col_key, value)
             # Update header row labels (repo names may have changed)
             for key in new_order:
-                if key.startswith("__repo__"):
-                    repo = key.removeprefix("__repo__")
+                if key.startswith(REPO_HEADER_PREFIX):
+                    repo = key.removeprefix(REPO_HEADER_PREFIX)
                     display = repo_names.get(repo, Path(repo).name)
-                    header_text = Text(f"── {display} ──", style="bold dim")
+                    header_text = _repo_header_text(display)
                     self.update_cell(key, self._col_keys[0], header_text)
         else:
             # Slow path: sessions added/removed/reordered — full rebuild
@@ -297,9 +304,9 @@ class SessionTable(DataTable):
             for state in sorted_sessions:
                 repo = state.git_repo_root
                 if repo and repo != last_repo:
-                    header_key = f"__repo__{repo}"
+                    header_key = f"{REPO_HEADER_PREFIX}{repo}"
                     display = repo_names.get(repo, Path(repo).name)
-                    header_text = Text(f"── {display} ──", style="bold dim")
+                    header_text = _repo_header_text(display)
                     empty_cells = [""] * (num_cols - 1)
                     self.add_row(header_text, *empty_cells, key=header_key)
                     last_repo = repo
@@ -329,31 +336,28 @@ class SessionTable(DataTable):
         else:
             self.border_subtitle = f" {len(sorted_sessions)} active "
 
-    def get_selected_session_id(self) -> str | None:
-        """Return the session_id of the currently highlighted row.
-
-        Returns None for repo header rows (keys starting with '__repo__').
-        """
+    def _get_cursor_row_key(self) -> str | None:
+        """Return the raw row key string at the cursor position."""
         if self.row_count == 0:
             return None
         row_key, _ = self.coordinate_to_cell_key(self.cursor_coordinate)
-        if not row_key:
-            return None
-        key = str(row_key.value)
-        if key.startswith("__repo__"):
+        return str(row_key.value) if row_key else None
+
+    def get_selected_session_id(self) -> str | None:
+        """Return the session_id of the currently highlighted row.
+
+        Returns None for repo header rows.
+        """
+        key = self._get_cursor_row_key()
+        if not key or key.startswith(REPO_HEADER_PREFIX):
             return None
         return key
 
     def get_selected_repo_root(self) -> str | None:
         """Return the repo root if cursor is on a group header row."""
-        if self.row_count == 0:
-            return None
-        row_key, _ = self.coordinate_to_cell_key(self.cursor_coordinate)
-        if not row_key:
-            return None
-        key = str(row_key.value)
-        if key.startswith("__repo__"):
-            return key.removeprefix("__repo__")
+        key = self._get_cursor_row_key()
+        if key and key.startswith(REPO_HEADER_PREFIX):
+            return key.removeprefix(REPO_HEADER_PREFIX)
         return None
 
 

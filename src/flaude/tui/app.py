@@ -30,7 +30,7 @@ from flaude.tui.screens.input_dialog import InputDialog
 from flaude.tui.screens.prompt_dialog import PromptDialog
 from flaude.tui.screens.help_dialog import HelpDialog
 from flaude.tui.screens.settings_panel import SettingsPanel
-from flaude.tui.widgets.session_table import SessionTable
+from flaude.tui.widgets.session_table import SessionTable, REPO_HEADER_PREFIX
 from flaude.tui.widgets.session_detail import SessionDetail
 from flaude.tui.widgets.permission_panel import PermissionPanel
 from flaude.tui.widgets.activity_log import ActivityLog
@@ -196,8 +196,8 @@ class FlaudeApp(App):
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle Enter: navigate to session, or rename group if on a header."""
         key = str(event.row_key.value) if event.row_key else ""
-        if key.startswith("__repo__"):
-            self._rename_group(key.removeprefix("__repo__"))
+        if key.startswith(REPO_HEADER_PREFIX):
+            self._rename_group(key.removeprefix(REPO_HEADER_PREFIX))
         else:
             self.action_goto_session()
 
