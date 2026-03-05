@@ -148,6 +148,7 @@ def cmd_update(args: argparse.Namespace) -> None:
             uv,
             "pip",
             "install",
+            "--system",
             "--upgrade",
             "flaude",
             "--index-url",
