@@ -114,3 +114,25 @@ Support groups within groups — e.g. a "backend" group containing "auth-service
 - Collapsible group headers — expand/collapse a parent group to show/hide its children
 - Allow drag-and-drop (via keybindings) to move a group under another group
 - Config format: `session_groups` values could use `/` as a nesting separator, or a separate `group_hierarchy` config section
+
+## MCP server management
+
+A TUI for managing MCP servers — easily enable/disable servers per project or system-wide without manually editing JSON config files.
+
+**Open question:** Does this belong in Flaude (as another panel/view) or as a standalone TUI? Flaude is a session monitor, and MCP management is orthogonal to session monitoring. But having it in one place avoids yet another tool.
+
+**What it would do:**
+
+- List all configured MCP servers (from `~/.claude/settings.json`, project `.claude/settings.json`, `.mcp.json`)
+- Toggle servers on/off per scope (global vs project)
+- Show server status (connected, errored, not running)
+- Add/remove servers with guided prompts instead of hand-editing JSON
+- Manage allowed/blocked tools per server
+
+**Why this is annoying today:**
+
+- MCP config is split across multiple JSON files at different scopes
+- No way to quickly disable a flaky server without deleting its config
+- Adding a new server means copying JSON boilerplate and getting the `args` array right
+- No visibility into which servers are actually running vs configured-but-broken
+- Having all MCP servers enabled globally bloats context — every server's tool definitions are injected into every conversation, eating tokens even when irrelevant to the task
