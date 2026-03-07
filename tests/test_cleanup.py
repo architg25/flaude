@@ -69,6 +69,48 @@ class TestCleanupStaleSessions:
         assert cleaned == 1
         assert mgr.load_session("ended") is None
 
+    def test_idle_session_gets_longer_grace_period(self, mgr, monkeypatch):
+        """IDLE session <5min old is not process-checked (longer threshold)."""
+        monkeypatch.setattr("flaude.state.cleanup.STALE_SESSION_TIMEOUT", 1800)
+        monkeypatch.setattr("flaude.state.cleanup._get_active_cwds", lambda: set())
+        _stale_state(
+            "idle",
+            mgr,
+            age_seconds=60,
+            cwd="/tmp/idle",
+            status=SessionStatus.IDLE,
+        )
+
+        cleaned = cleanup_stale_sessions(mgr)
+        assert cleaned == 0
+        assert mgr.load_session("idle") is not None
+
+    def test_idle_session_past_grace_period_deleted(self, mgr, monkeypatch):
+        """IDLE session >5min old with no process is cleaned up."""
+        monkeypatch.setattr("flaude.state.cleanup.STALE_SESSION_TIMEOUT", 1800)
+        monkeypatch.setattr("flaude.state.cleanup._get_active_cwds", lambda: set())
+        _stale_state(
+            "idle-old",
+            mgr,
+            age_seconds=600,
+            cwd="/tmp/idle",
+            status=SessionStatus.IDLE,
+        )
+
+        cleaned = cleanup_stale_sessions(mgr)
+        assert cleaned == 1
+        assert mgr.load_session("idle-old") is None
+
+    def test_lsof_failure_skips_process_check(self, mgr, monkeypatch):
+        """When lsof fails (returns None), no sessions are reaped."""
+        monkeypatch.setattr("flaude.state.cleanup.STALE_SESSION_TIMEOUT", 1800)
+        monkeypatch.setattr("flaude.state.cleanup._get_active_cwds", lambda: None)
+        _stale_state("orphan-maybe", mgr, age_seconds=60, cwd="/tmp/dead")
+
+        cleaned = cleanup_stale_sessions(mgr)
+        assert cleaned == 0
+        assert mgr.load_session("orphan-maybe") is not None
+
     def test_empty_returns_zero(self, mgr):
         assert cleanup_stale_sessions(mgr) == 0
 

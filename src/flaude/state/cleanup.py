@@ -9,12 +9,19 @@ from flaude.constants import STALE_SESSION_TIMEOUT, utcnow
 from flaude.state.manager import StateManager
 from flaude.state.models import SessionState, SessionStatus, WAITING_STATUSES
 
-# Sessions inactive for this many seconds get a process check
+# WORKING sessions inactive for this many seconds get a process check
 _PROCESS_CHECK_THRESHOLD = 30
+# IDLE/NEW sessions get a longer grace period — they're legitimately
+# waiting for user input, not orphaned
+_IDLE_PROCESS_CHECK_THRESHOLD = 300
 
 
-def _get_active_cwds() -> set[str]:
-    """Get CWDs of all running claude/node processes in one call."""
+def _get_active_cwds() -> set[str] | None:
+    """Get CWDs of all running claude/node processes in one call.
+
+    Returns None when lsof fails — callers must skip process checks rather
+    than treating failure as "no processes running".
+    """
     try:
         result = subprocess.run(
             ["lsof", "-d", "cwd", "-c", "claude", "-c", "node", "-Fn"],
@@ -28,7 +35,7 @@ def _get_active_cwds() -> set[str]:
                 cwds.add(line[1:].rstrip("/"))
         return cwds
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return set()
+        return None
 
 
 def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
@@ -37,11 +44,14 @@ def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
     sessions = mgr.load_all_sessions()
     now = utcnow()
     cutoff_stale = now - timedelta(seconds=STALE_SESSION_TIMEOUT)
-    cutoff_check = now - timedelta(seconds=_PROCESS_CHECK_THRESHOLD)
+    cutoff_working = now - timedelta(seconds=_PROCESS_CHECK_THRESHOLD)
+    cutoff_idle = now - timedelta(seconds=_IDLE_PROCESS_CHECK_THRESHOLD)
     cleaned = 0
 
-    # Lazy-load active CWDs only when needed (at most once per cleanup cycle)
-    active_cwds: set[str] | None = None
+    # Lazy-load active CWDs only when needed (at most once per cleanup cycle).
+    # Uses a sentinel so we distinguish "haven't tried" from "lsof failed (None)".
+    _UNSET = object()
+    active_cwds: set[str] | None | object = _UNSET
 
     for sid, state in sessions.items():
         if state.status == SessionStatus.ENDED:
@@ -55,10 +65,18 @@ def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
             cleaned += 1
             continue
 
-        # Soft check: session inactive for 30s+ — verify process exists
-        if state.last_event_at < cutoff_check:
-            if active_cwds is None:
+        # Pick threshold based on status — IDLE sessions get a longer grace
+        # period since they're legitimately waiting for user input
+        is_idle = state.status in (SessionStatus.IDLE, SessionStatus.NEW)
+        cutoff = cutoff_idle if is_idle else cutoff_working
+
+        # Soft check: verify process still exists
+        if state.last_event_at < cutoff:
+            if active_cwds is _UNSET:
                 active_cwds = _get_active_cwds()
+            # lsof failed — don't nuke sessions based on missing data
+            if active_cwds is None:
+                continue
             cwd_normalized = (state.cwd or "").rstrip("/")
             if not cwd_normalized or cwd_normalized not in active_cwds:
                 mgr.delete_session(sid)
