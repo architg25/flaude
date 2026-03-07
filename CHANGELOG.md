@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.14 — Tmux backend & terminal-agnostic sessions
+
+### 0.14.0
+
+- Add tmux backend for terminal-agnostic session management — no longer requires iTerm2
+- Auto-run `init` on first flaude launch
+- Auto-versioning via git tags and Artifactory CI publishing
+- Replace hatch-vcs with custom git-tag versioning in build hook
+- Improve `flaude update`: skip dev versions by default, auto-run init after update
+- Fix `uv pip install --system` flag for flaude update
+- Backstage registration and TechDocs setup
+
 ## 0.13 — Repo migration to vibes org
 
 ### 0.13.0
