@@ -24,6 +24,17 @@ from flaude.terminal.detect import detect_terminal
 from flaude.terminal.launch import launch_session
 from flaude.terminal.inject import send_text_to_session
 from flaude.terminal.navigate import navigate_to_session
+from flaude.terminal.tmux import (
+    build_tmux_attach_command,
+    build_tmux_attach_shell_command,
+    get_tmux_client_tty,
+    get_tmux_prefix,
+    is_flaude_in_tmux,
+    is_tmux_available,
+    launch_tmux_session,
+    navigate_tmux_session,
+    send_text_tmux,
+)
 from flaude.tui.notifications import NotificationManager
 from flaude.tui.screens.confirm_dialog import ConfirmDialog
 from flaude.tui.screens.input_dialog import InputDialog
@@ -67,6 +78,7 @@ class FlaudeApp(App):
         super().__init__()
         self._mgr = StateManager()
         self._fallback_terminal = detect_terminal()
+        self._flaude_in_tmux = is_flaude_in_tmux()
         self._config = load_config()
         self._config = migrate_notifications_config(self._config)
         save_config(self._config)
@@ -123,7 +135,7 @@ class FlaudeApp(App):
         active = {
             sid: s
             for sid, s in sessions.items()
-            if s.status != SessionStatus.ENDED and s.terminal is not None
+            if s.status != SessionStatus.ENDED and (s.terminal is not None or s.is_tmux)
         }
         correct_stale_waiting(self._mgr, active)
         self._active = active
@@ -306,16 +318,67 @@ class FlaudeApp(App):
             self.notify("Session not found", severity="error")
             return
 
-        terminal = state.terminal or self._fallback_terminal
-
-        if navigate_to_session(terminal, state.cwd, tty=state.tty):
-            self.notify(f"Switched to {session_id[:8]}")
+        if state.is_tmux and state.tmux_pane:
+            self._goto_tmux_session(state)
         else:
-            self.notify(
-                f"Could not switch. Resume with: claude --resume {session_id}",
-                severity="warning",
-                timeout=10,
-            )
+            terminal = state.terminal or self._fallback_terminal
+            if navigate_to_session(terminal, state.cwd, tty=state.tty):
+                self.notify(f"Switched to {session_id[:8]}")
+            else:
+                self.notify(
+                    f"Could not switch. Resume with: claude --resume {session_id}",
+                    severity="warning",
+                    timeout=10,
+                )
+
+    def _goto_tmux_session(self, state: SessionState) -> None:
+        """Navigate to a tmux-based session, respecting config."""
+        pane = state.tmux_pane
+        sid_short = state.session_id[:8]
+        nav_terminal = state.parent_terminal or self._fallback_terminal
+        open_mode = self._config.get("tmux_open_mode", "inline")
+
+        if open_mode == "inline":
+            if self._flaude_in_tmux:
+                # Same tmux server — just switch windows
+                if navigate_tmux_session(pane):
+                    self.notify(f"Switched to {sid_short}")
+                else:
+                    self.notify("Could not switch tmux pane", severity="error")
+            else:
+                # Suspend flaude TUI, attach tmux
+                prefix = get_tmux_prefix()
+                attach_argv = build_tmux_attach_command(pane)
+                self.notify(
+                    f"Attaching. Press {prefix} D to return.",
+                    timeout=3,
+                )
+
+                import subprocess
+                import time
+
+                time.sleep(0.3)  # let notification render
+                with self.suspend():
+                    subprocess.run(attach_argv)
+        else:
+            # new_tab mode: try to find existing iTerm2 tab first
+            if not self._flaude_in_tmux and nav_terminal == "iTerm2":
+                client_tty = get_tmux_client_tty(pane)
+                if client_tty and navigate_to_session(
+                    "iTerm2", state.cwd, tty=client_tty
+                ):
+                    self.notify(f"Switched to {sid_short}")
+                    return
+
+            # Open a new tab with tmux attach
+            attach_cmd = build_tmux_attach_shell_command(pane)
+            if launch_session(nav_terminal, state.cwd, command=attach_cmd):
+                self.notify(f"Opened {sid_short} in new tab")
+            else:
+                self.notify(
+                    f"Could not open tab ({nav_terminal or 'unknown'})",
+                    severity="error",
+                )
 
     def action_new_session(self) -> None:
         table = self.query_one(SessionTable)
@@ -326,17 +389,32 @@ class FlaudeApp(App):
             if state and state.cwd:
                 default_cwd = state.cwd
 
+        use_tmux = self._config.get("launch_backend") == "tmux"
+
         def on_result(path: str | None) -> None:
             if not path:
                 return
-            terminal = self._fallback_terminal
-            if launch_session(terminal, path):
-                self.notify(f"Launched claude in {path.rsplit('/', 1)[-1]}")
+            basename = path.rsplit("/", 1)[-1]
+            if use_tmux:
+                if not is_tmux_available():
+                    self.notify(
+                        "tmux not found. Install: brew install tmux",
+                        severity="error",
+                    )
+                    return
+                if launch_tmux_session(path):
+                    self.notify(f"Launched claude in {basename} (tmux)")
+                else:
+                    self.notify("Could not create tmux session", severity="error")
             else:
-                self.notify(
-                    f"Could not open terminal ({terminal or 'unknown'})",
-                    severity="error",
-                )
+                terminal = self._fallback_terminal
+                if launch_session(terminal, path):
+                    self.notify(f"Launched claude in {basename}")
+                else:
+                    self.notify(
+                        f"Could not open terminal ({terminal or 'unknown'})",
+                        severity="error",
+                    )
 
         self.push_screen(InputDialog("New session directory:", default_cwd), on_result)
 
@@ -356,21 +434,27 @@ class FlaudeApp(App):
             self.notify("Session is busy", severity="warning")
             return
 
-        if state.terminal != "iTerm2":
-            self.notify("Only iTerm2 supported", severity="warning")
-            return
-
-        if not state.tty:
-            self.notify("No tty for session", severity="warning")
-            return
+        use_tmux = state.is_tmux and state.tmux_pane
+        if not use_tmux:
+            if state.terminal != "iTerm2":
+                self.notify("Only iTerm2 or tmux supported", severity="warning")
+                return
+            if not state.tty:
+                self.notify("No tty for session", severity="warning")
+                return
 
         project = state.cwd.rsplit("/", 1)[-1] if state.cwd else session_id[:8]
         tty = state.tty
+        tmux_pane = state.tmux_pane
 
         def on_result(text: str | None) -> None:
             if not text:
                 return
-            if send_text_to_session(tty, text):
+            if use_tmux:
+                ok = send_text_tmux(tmux_pane, text)
+            else:
+                ok = send_text_to_session(tty, text)
+            if ok:
                 self.notify(f"Sent to {project}")
             else:
                 self.notify("Failed to send prompt", severity="error")
@@ -393,21 +477,27 @@ class FlaudeApp(App):
             self.notify("Session is busy", severity="warning")
             return
 
-        if state.terminal != "iTerm2":
-            self.notify("Only iTerm2 supported", severity="warning")
-            return
-
-        if not state.tty:
-            self.notify("No tty for session", severity="warning")
-            return
+        use_tmux = state.is_tmux and state.tmux_pane
+        if not use_tmux:
+            if state.terminal != "iTerm2":
+                self.notify("Only iTerm2 or tmux supported", severity="warning")
+                return
+            if not state.tty:
+                self.notify("No tty for session", severity="warning")
+                return
 
         project = state.cwd.rsplit("/", 1)[-1] if state.cwd else session_id[:8]
         tty = state.tty
+        tmux_pane = state.tmux_pane
 
         def on_result(confirmed: bool) -> None:
             if not confirmed:
                 return
-            if send_text_to_session(tty, "/exit"):
+            if use_tmux:
+                ok = send_text_tmux(tmux_pane, "/exit")
+            else:
+                ok = send_text_to_session(tty, "/exit")
+            if ok:
                 self.notify(f"Exiting {project}")
             else:
                 self.notify("Failed to send /exit", severity="error")
@@ -467,6 +557,18 @@ class FlaudeApp(App):
             save_config(self._config)
             self._sync_notifier()
             self.notify("Settings saved")
+            # One-time notice when user first enables tmux backend
+            if self._config.get("launch_backend") == "tmux" and not self._config.get(
+                "tmux_notice_seen"
+            ):
+                self._config["tmux_notice_seen"] = True
+                save_config(self._config)
+                self.notify(
+                    "tmux support is new and may have rough edges — "
+                    "please report any issues in #flaude, thanks!",
+                    severity="warning",
+                    timeout=10,
+                )
 
         self.push_screen(SettingsPanel(self._config), on_result)
 

@@ -79,7 +79,11 @@ def _build_row_data(
     )
     project = _format_project(state)
     uptime = format_uptime(now, state.started_at)
-    term = state.terminal or "?"
+    if state.is_tmux:
+        parent = state.parent_terminal or "?"
+        term = f"{parent} (tmux)"
+    else:
+        term = state.terminal or "?"
     mode = state.permission_mode or "default"
     context = _format_context(state.context_tokens, state.model, css)
     label = state.agent_name if state.agent_name else state.session_id[:8]

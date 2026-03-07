@@ -122,6 +122,111 @@ def _detect_terminal_from_env() -> str | None:
     return None
 
 
+def _detect_tmux_info() -> tuple[bool, str | None, str | None]:
+    """Detect tmux session info and the parent terminal behind it.
+
+    Returns (is_tmux, pane_id, parent_terminal).
+    Duplicated from flaude.terminal.tmux — the dispatcher must be
+    self-contained for startup speed.
+    """
+    import subprocess
+
+    if not os.environ.get("TMUX"):
+        return False, None, None
+
+    pane_id = os.environ.get("TMUX_PANE")  # e.g. "%5"
+
+    parent_terminal = _detect_tmux_parent_terminal(subprocess)
+
+    return True, pane_id, parent_terminal
+
+
+def _detect_tmux_parent_terminal(subprocess) -> str | None:
+    """Detect the terminal app behind tmux.
+
+    Strategy order:
+    1. tmux show-environment TERM_PROGRAM (fast, works if terminal set it)
+    2. Walk the tmux client's parent process tree to find a known terminal
+    """
+    # Strategy 1: tmux environment
+    try:
+        result = subprocess.run(
+            ["tmux", "show-environment", "TERM_PROGRAM"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        output = result.stdout.strip()
+        if "=" in output and not output.startswith("-"):
+            value = output.split("=", 1)[1]
+            terminal = _TERM_PROGRAM_MAP.get(value)
+            if terminal:
+                return terminal
+    except (subprocess.TimeoutExpired, OSError, ValueError):
+        pass
+
+    # Strategy 2: walk the tmux client's parent process tree
+    try:
+        result = subprocess.run(
+            ["tmux", "list-clients", "-F", "#{client_pid}"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            client_pid = result.stdout.strip().splitlines()[0]
+            terminal = _find_terminal_in_ancestors(subprocess, int(client_pid))
+            if terminal:
+                return terminal
+    except (subprocess.TimeoutExpired, OSError, ValueError):
+        pass
+
+    return None
+
+
+# Known terminal binary substrings for process tree walking
+_TERMINAL_PROCESS_NAMES = {
+    "iTerm2": "iTerm",
+    "Ghostty": "ghostty",
+    "Terminal": "Terminal.app",
+    "Warp": "Warp",
+}
+
+
+def _find_terminal_in_ancestors(subprocess, pid: int) -> str | None:
+    """Walk the process tree from pid upwards looking for a known terminal."""
+    for _ in range(10):
+        if pid <= 1:
+            break
+        try:
+            result = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "ppid=,comm="],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            break
+        line = result.stdout.strip()
+        if not line:
+            break
+        parts = line.split(None, 1)
+        if len(parts) < 2:
+            break
+        ppid_str, comm = parts
+        for terminal_name, needle in _TERMINAL_PROCESS_NAMES.items():
+            if needle in comm:
+                return terminal_name
+        # JetBrains
+        if "jetbrains" in comm.lower() or "idea" in comm.lower():
+            return "IntelliJ"
+        try:
+            pid = int(ppid_str)
+        except ValueError:
+            break
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Token usage from transcript
 # ---------------------------------------------------------------------------
@@ -224,7 +329,7 @@ def _load_or_create(event: dict, sm: StateManager) -> SessionState:
         state.cwd = event["cwd"]
     if not state.terminal:
         state.terminal = _detect_terminal_from_env()
-    if not state.tty:
+    if not state.tty and not state.is_tmux:
         state.tty = _detect_tty()
     # Always update permission_mode — it can change during a session
     if event.get("permission_mode"):
@@ -244,6 +349,12 @@ def _load_or_create(event: dict, sm: StateManager) -> SessionState:
         state.git_repo_root = repo_root or ""
         state.git_branch = branch
         state.git_is_worktree = is_wt
+    # Backfill tmux fields — None = not yet checked (sentinel pattern like git_repo_root)
+    if state.is_tmux is None:
+        is_tmux, pane_id, parent_terminal = _detect_tmux_info()
+        state.is_tmux = is_tmux
+        state.tmux_pane = pane_id
+        state.parent_terminal = parent_terminal
     return state
 
 
@@ -279,6 +390,10 @@ def _handle_session_start(event: dict, sm: StateManager) -> None:
     state.git_repo_root = repo_root or ""
     state.git_branch = branch
     state.git_is_worktree = is_wt
+    is_tmux, pane_id, parent_terminal = _detect_tmux_info()
+    state.is_tmux = is_tmux
+    state.tmux_pane = pane_id
+    state.parent_terminal = parent_terminal
     sm.save_session(state)
     _log(session_id, "SessionStart")
 

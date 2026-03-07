@@ -166,29 +166,6 @@ def _cwds_match(resolved: str, target: str) -> bool:
 def _build_script(terminal: str, cwd: str) -> str | None:
     basename = escape_applescript(Path(cwd).name)
 
-    if terminal == "Ghostty":
-        return f"""
-        tell application "System Events"
-            tell process "Ghostty"
-                set allWindows to every window
-                repeat with w in allWindows
-                    if name of w contains "{basename}" then
-                        perform action "AXRaise" of w
-                    end if
-                end repeat
-            end tell
-        end tell
-        tell application "Ghostty"
-            repeat with w in windows
-                if miniaturized of w then
-                    set miniaturized of w to false
-                end if
-            end repeat
-            activate
-        end tell
-        return "true"
-        """
-
     if terminal == "Terminal":
         return f"""
         tell application "Terminal"
@@ -210,26 +187,7 @@ def _build_script(terminal: str, cwd: str) -> str | None:
         return "true"
         """
 
-    if terminal == "Warp":
-        # Warp has no AppleScript API for tab switching.
-        # Unminimize and bring to front.
-        return """
-        tell application "System Events"
-            tell process "Warp"
-                set allWindows to every window
-                repeat with w in allWindows
-                    try
-                        perform action "AXRaise" of w
-                    end try
-                end repeat
-            end tell
-        end tell
-        tell application "Warp" to activate
-        return "true"
-        """
-
     if terminal == "IntelliJ":
-        # Find whichever JetBrains IDE is running and bring it to front.
         ide_list = ", ".join(f'"{name}"' for name in JETBRAINS_IDES)
         return f"""
         tell application "System Events"
@@ -238,7 +196,6 @@ def _build_script(terminal: str, cwd: str) -> str | None:
                 if (name of processes) contains (appName as text) then
                     set appFile to application file of (first process whose name is (appName as text))
                     set realName to name of appFile
-                    -- Force to front
                     tell process (appName as text)
                         set frontmost to true
                     end tell
@@ -250,4 +207,19 @@ def _build_script(terminal: str, cwd: str) -> str | None:
         return "false"
         """
 
-    return None
+    # Generic: activate and bring to front (Ghostty, Warp, any terminal)
+    process_name = escape_applescript(terminal)
+    return f"""
+    tell application "System Events"
+        tell process "{process_name}"
+            set allWindows to every window
+            repeat with w in allWindows
+                try
+                    perform action "AXRaise" of w
+                end try
+            end repeat
+        end tell
+    end tell
+    tell application "{process_name}" to activate
+    return "true"
+    """

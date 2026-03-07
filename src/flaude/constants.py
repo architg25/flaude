@@ -44,6 +44,9 @@ TERMINAL_OVERRIDE = os.environ.get("FLAUDE_TERMINAL")
 # All hooks are non-blocking (monitor only), so a short timeout is fine
 HOOK_TIMEOUT_DEFAULT = 3
 
+# tmux session name used when launch_backend is "tmux"
+TMUX_SESSION_NAME = "flaude"
+
 # Identifier used to detect flaude hooks in settings.json.
 # Try native Rust binary first, fall back to Python dispatcher.
 _HOOK_BINARY = Path(__file__).parent / "bin" / "flaude-hook"

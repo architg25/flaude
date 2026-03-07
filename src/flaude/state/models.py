@@ -86,3 +86,6 @@ class SessionState(BaseModel):
     git_repo_root: str | None = None
     git_branch: str | None = None
     git_is_worktree: bool = False
+    is_tmux: bool | None = None
+    tmux_pane: str | None = None
+    parent_terminal: str | None = None

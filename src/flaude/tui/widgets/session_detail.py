@@ -112,7 +112,11 @@ class SessionDetail(Static):
         if state.model:
             lines.append(_kv("Model", state.model))
         lines.append(_kv("Mode", state.permission_mode or "default"))
-        lines.append(_kv("Term", state.terminal or "?"))
+        if state.is_tmux:
+            parent = state.parent_terminal or "?"
+            lines.append(_kv("Term", f"{parent} (tmux)"))
+        else:
+            lines.append(_kv("Term", state.terminal or "?"))
 
         # ── Timing ──
         lines.append("")

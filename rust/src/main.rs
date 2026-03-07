@@ -204,6 +204,12 @@ struct SessionState {
     git_branch: Option<String>,
     #[serde(default)]
     git_is_worktree: bool,
+    #[serde(default)]
+    is_tmux: Option<bool>,
+    #[serde(default)]
+    tmux_pane: Option<String>,
+    #[serde(default)]
+    parent_terminal: Option<String>,
 }
 
 fn default_permission_mode() -> String {
@@ -367,6 +373,116 @@ fn detect_terminal_from_env() -> Option<String> {
         if emu.contains("JetBrains") {
             return Some("IntelliJ".into());
         }
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------
+// Tmux detection — mirrors dispatcher._detect_tmux_info()
+// ---------------------------------------------------------------------------
+
+fn detect_tmux_info() -> (bool, Option<String>, Option<String>) {
+    if env::var("TMUX").is_err() {
+        return (false, None, None);
+    }
+
+    let pane = env::var("TMUX_PANE").ok();
+
+    // Try to get the parent terminal from tmux's environment
+    let parent_terminal = detect_tmux_parent_terminal();
+
+    (true, pane, parent_terminal)
+}
+
+fn detect_tmux_parent_terminal() -> Option<String> {
+    // Strategy 1: Check TERM_PROGRAM in tmux's environment
+    if let Ok(output) = std::process::Command::new("tmux")
+        .args(["show-environment", "TERM_PROGRAM"])
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let line = stdout.trim();
+            if !line.starts_with('-') {
+                if let Some(value) = line.strip_prefix("TERM_PROGRAM=") {
+                    let result = match value {
+                        "iTerm.app" => Some("iTerm2"),
+                        "ghostty" => Some("Ghostty"),
+                        "Apple_Terminal" => Some("Terminal"),
+                        "WarpTerminal" => Some("Warp"),
+                        _ => None,
+                    };
+                    if let Some(name) = result {
+                        return Some(name.into());
+                    }
+                }
+            }
+        }
+    }
+
+    // Strategy 2: Walk the tmux client's parent process tree
+    if let Ok(output) = std::process::Command::new("tmux")
+        .args(["list-clients", "-F", "#{client_pid}"])
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(first_line) = stdout.trim().lines().next() {
+                if let Ok(client_pid) = first_line.parse::<u32>() {
+                    if let Some(terminal) = find_terminal_in_ancestors(client_pid) {
+                        return Some(terminal);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Walk the process tree from pid upwards looking for a known terminal.
+fn find_terminal_in_ancestors(mut pid: u32) -> Option<String> {
+    for _ in 0..10 {
+        if pid <= 1 {
+            break;
+        }
+        let output = match std::process::Command::new("ps")
+            .args(["-p", &pid.to_string(), "-o", "ppid=,comm="])
+            .output()
+        {
+            Ok(o) => o,
+            Err(_) => break,
+        };
+        let text = String::from_utf8_lossy(&output.stdout);
+        let line = text.trim();
+        if line.is_empty() {
+            break;
+        }
+        let (ppid_str, comm) = match line.split_once(|c: char| c.is_whitespace()) {
+            Some(pair) => pair,
+            None => break,
+        };
+        let comm = comm.trim();
+        if comm.contains("iTerm") {
+            return Some("iTerm2".into());
+        }
+        if comm.contains("ghostty") {
+            return Some("Ghostty".into());
+        }
+        if comm.contains("Terminal.app") {
+            return Some("Terminal".into());
+        }
+        if comm.contains("Warp") {
+            return Some("Warp".into());
+        }
+        let comm_lower = comm.to_lowercase();
+        if comm_lower.contains("jetbrains") || comm_lower.contains("idea") {
+            return Some("IntelliJ".into());
+        }
+        pid = match ppid_str.parse() {
+            Ok(p) => p,
+            Err(_) => break,
+        };
     }
     None
 }
@@ -639,6 +755,9 @@ fn load_or_create(event: &serde_json::Value) -> SessionState {
             git_repo_root: None,
             git_branch: None,
             git_is_worktree: false,
+            is_tmux: None,
+            tmux_pane: None,
+            parent_terminal: None,
         }
     });
 
@@ -651,9 +770,6 @@ fn load_or_create(event: &serde_json::Value) -> SessionState {
     }
     if state.terminal.is_none() {
         state.terminal = detect_terminal_from_env();
-    }
-    if state.tty.is_none() {
-        state.tty = detect_tty();
     }
     if let Some(pm) = get_opt_str(event, "permission_mode") {
         state.permission_mode = pm;
@@ -669,6 +785,17 @@ fn load_or_create(event: &serde_json::Value) -> SessionState {
         state.git_repo_root = Some(repo_root.unwrap_or_default());
         state.git_branch = branch;
         state.git_is_worktree = is_wt;
+    }
+    // Backfill tmux fields — None = not yet checked (sentinel pattern like git_repo_root)
+    if state.is_tmux.is_none() {
+        let (is_tmux, tmux_pane, parent_terminal) = detect_tmux_info();
+        state.is_tmux = Some(is_tmux);
+        state.tmux_pane = tmux_pane;
+        state.parent_terminal = parent_terminal;
+    }
+    // Skip TTY detection for tmux sessions — they use pane IDs
+    if state.tty.is_none() && state.is_tmux != Some(true) {
+        state.tty = detect_tty();
     }
 
     state
@@ -749,11 +876,18 @@ fn handle_session_start(event: &serde_json::Value) {
         git_repo_root: None,
         git_branch: None,
         git_is_worktree: false,
+        is_tmux: None,
+        tmux_pane: None,
+        parent_terminal: None,
     };
     let (repo_root, branch, is_wt) = get_git_info(&state.cwd);
     state.git_repo_root = Some(repo_root.unwrap_or_default());
     state.git_branch = branch;
     state.git_is_worktree = is_wt;
+    let (is_tmux, tmux_pane, parent_terminal) = detect_tmux_info();
+    state.is_tmux = Some(is_tmux);
+    state.tmux_pane = tmux_pane;
+    state.parent_terminal = parent_terminal;
     save_session(&state);
     log_activity(&session_id, "SessionStart", "");
 }
@@ -1069,6 +1203,9 @@ mod tests {
             git_repo_root: None,
             git_branch: None,
             git_is_worktree: false,
+            is_tmux: None,
+            tmux_pane: None,
+            parent_terminal: None,
         };
         let json = serde_json::to_string_pretty(&state).unwrap();
         let parsed: SessionState = serde_json::from_str(&json).unwrap();

@@ -114,10 +114,13 @@ class TestBuildLaunchScript:
 
         assert _build_launch_script("IntelliJ", "/tmp/proj") is None
 
-    def test_unknown_terminal_returns_none(self):
+    def test_unknown_terminal_uses_generic_fallback(self):
         from flaude.terminal.launch import _build_launch_script
 
-        assert _build_launch_script("RandomTerminal", "/tmp/proj") is None
+        script = _build_launch_script("RandomTerminal", "/tmp/proj")
+        assert script is not None
+        assert "RandomTerminal" in script
+        assert "pbcopy" in script
 
     def test_cwd_with_quotes_escaped(self):
         from flaude.terminal.launch import _build_launch_script

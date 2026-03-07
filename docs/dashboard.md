@@ -23,7 +23,7 @@ The TUI is split into a left pane and a right detail panel. Panels use rounded b
 | Status   | Theme-colored label with duration (e.g. `RUNNING 3m12s`, `IDLE 45s`, `PERMISSION 1m05s`, `INPUT`). Team members are prefixed with tree connectors (├/└)        |
 | Session  | First 8 chars of the session ID, or agent name for team members (e.g. `researcher`). Shows custom title if set via `/rename`. Long names truncated to 20 chars |
 | Project  | Directory basename with smart truncation. Detail panel shows full worktree path when applicable                                                                |
-| Terminal | Detected terminal (iTerm2, Ghostty, Terminal, Warp, IntelliJ)                                                                                                  |
+| Terminal | Detected terminal (iTerm2, Ghostty, Terminal, Warp, IntelliJ). tmux sessions show `iTerm2 (tmux)` etc.                                                         |
 | Mode     | Permission mode (default, plan, acceptEdits, etc.)                                                                                                             |
 | Context  | Token count color-coded by model limit -- success (<50%), warning (50-80%), error (>80%)                                                                       |
 | Uptime   | Time since session started                                                                                                                                     |
@@ -54,9 +54,9 @@ Pressing `n` opens a directory picker with tab-completion and arrow-key navigati
 
 ### Exit session
 
-Pressing `d` sends `/exit` to the selected session's iTerm2 terminal, cleanly exiting Claude Code. Uses the same AppleScript injection mechanism as prompt sending (`send_text_to_session`). A confirmation dialog (y/n/Esc) is shown before sending.
+Pressing `d` sends `/exit` to the selected session, cleanly exiting Claude Code. A confirmation dialog (y/n/Esc) is shown before sending.
 
-Same requirements as prompt sending: session must be IDLE or NEW, iTerm2 terminal, and have a known tty. Other terminals lack a per-session API to target a specific tab by TTY — sending keystrokes to the frontmost window risks hitting the wrong session.
+Works on iTerm2 (via AppleScript tty matching) and all tmux sessions (via `tmux send-keys`). Session must be IDLE or NEW. Other non-tmux terminals lack a per-session API to target a specific tab.
 
 ### Notification system
 
@@ -102,17 +102,21 @@ Body text shows the pending question when available.
 
 ## Supported terminals
 
-Navigation (switching to the correct tab/window) and session launching:
+### Native mode (launch backend: auto)
 
 | Terminal     | Tab switch | New tab | Bring to front | Send prompt/exit | Detection              |
 | ------------ | ---------- | ------- | -------------- | ---------------- | ---------------------- |
 | iTerm2       | Yes        | Yes     | Yes            | Yes              | tty-to-cwd match       |
-| Ghostty      | Window     | Yes     | Yes            | No               | Window title match     |
+| Ghostty      | No         | Yes     | Yes            | No               | Brings app to front    |
 | Terminal.app | Yes        | Yes     | Yes            | No               | Custom tab title match |
 | Warp         | No         | Yes     | Yes            | No               | Brings app to front    |
 | IntelliJ     | No         | No      | Yes            | No               | Detects running IDE    |
 
-Terminal detection happens two ways: per-session via `TERM_PROGRAM` / `TERMINAL_EMULATOR` env vars (set by each session's hook), and as a dashboard fallback via AppleScript process detection.
+### tmux mode (launch backend: tmux) — _experimental_
+
+All terminals get full capability via tmux. Send prompt, exit session, and precise pane navigation work regardless of terminal. See [tmux.md](tmux.md) for details and limitations.
+
+Terminal detection happens two ways: per-session via `TERM_PROGRAM` / `TERMINAL_EMULATOR` env vars (set by each session's hook), and as a dashboard fallback via the same env vars or AppleScript process scanning. tmux sessions detect their parent terminal by walking the tmux client's process tree.
 
 ## Ghost session cleanup
 

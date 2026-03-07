@@ -13,8 +13,9 @@ The hook dispatcher ships as a native Rust binary for fast invocation (~14ms vs 
 - **Live session dashboard** — theme-aware status colors, context usage, uptime, and model info for all running sessions. Agent team members are visually nested under their parent session with tree connectors and agent names
 - **Terminal navigation** — jump to any session's terminal tab/window with a keypress. Full tab-level switching on iTerm2 (via TTY matching). Ghostty does window-level matching. Terminal.app matches by custom tab title. Warp and IntelliJ bring the app to the foreground
 - **Session launcher** — start new Claude sessions from the dashboard with directory autocomplete
-- **Send prompt** — type a prompt in flaude and send it to an idle Claude session via iTerm2's AppleScript API (iTerm2 only)
-- **Exit session** — send `/exit` to an idle Claude session from the dashboard (iTerm2 only)
+- **Send prompt** — type a prompt in flaude and send it to an idle Claude session (iTerm2 / tmux)
+- **Exit session** — send `/exit` to an idle Claude session from the dashboard (iTerm2 / tmux)
+- **tmux backend** _(experimental)_ — launch and manage sessions through tmux for terminal-agnostic operation. See [tmux.md](tmux.md)
 - **Notification system** — long turn completion and waiting-on-input alerts. Supports terminal bell, macOS notifications, and system sounds. Off by default
 - **Custom session titles** — displays titles set via Claude Code's `/rename` command
 - **Git worktree support** — sessions auto-grouped by git repo, worktrees grouped with main repo
@@ -57,8 +58,8 @@ flaude update           # Self-update to latest version
 | ----------- | -------------------------------------------------------------- |
 | `Enter`/`g` | Navigate to session's terminal (or rename group on header row) |
 | `n`         | Launch a new Claude session (directory picker)                 |
-| `p`         | Send a prompt to the selected session (iTerm2)                 |
-| `d`         | Exit the selected session (iTerm2)                             |
+| `p`         | Send a prompt to the selected session (iTerm2 / tmux)          |
+| `d`         | Exit the selected session (iTerm2 / tmux)                      |
 | `l`         | Cycle activity log mode (All / Summary / Tools)                |
 | `s`/`S`     | Toggle notifications / notification settings                   |
 | `t`         | Change theme (Textual theme picker with search)                |
@@ -90,6 +91,7 @@ Hook events (stdin JSON)
 ## More docs
 
 - [Dashboard](dashboard.md) — detailed layout, terminals, notifications, configuration
+- [tmux](tmux.md) — experimental tmux backend for terminal-agnostic session management
 - [Rust Hook](rust-hook.md) — performance analysis of the native hook dispatcher
 - [Known Bugs](BUG.md) — tracked issues
 - [TODO](TODO.md) — future plans

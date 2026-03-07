@@ -21,8 +21,9 @@ The hook dispatcher ships as a native Rust binary for fast invocation (~14ms vs 
 - **Live session dashboard** -- theme-aware status colors, context usage, uptime, and model info for all running sessions. Agent team members are visually nested under their parent session with tree connectors and agent names
 - **Terminal navigation** -- jump to any session's terminal tab/window with a keypress. Full tab-level switching on iTerm2 (via TTY matching). Ghostty does window-level matching (raises the window containing the project name). Terminal.app matches by custom tab title. Warp and IntelliJ are limited to bringing the app to the foreground
 - **Session launcher** -- start new Claude sessions from the dashboard with directory autocomplete
-- **Send prompt** -- type a prompt in flaude and send it to an idle Claude session via iTerm2's AppleScript API. Supports multi-line input (Shift+Enter for new lines, Enter to send). iTerm2 only
-- **Exit session** -- send `/exit` to an idle Claude session from the dashboard. Uses the same iTerm2 AppleScript injection as prompt sending, with a confirmation dialog. iTerm2 only
+- **Send prompt** -- type a prompt in flaude and send it to an idle Claude session. Works on iTerm2 (via AppleScript) and all tmux sessions (via `tmux send-keys`). Supports multi-line input (Shift+Enter for new lines, Enter to send)
+- **Exit session** -- send `/exit` to an idle Claude session from the dashboard with a confirmation dialog. Works on iTerm2 and all tmux sessions
+- **tmux backend** _(experimental)_ -- launch and manage sessions through tmux for terminal-agnostic operation. Works with any terminal. See [docs/tmux.md](docs/tmux.md)
 - **Notification system** -- two categories: long turn completion (alert when a turn finishes after N minutes) and waiting on input (alert when a session needs permission, an answer, or plan review). Supports terminal bell, macOS notifications, and system sounds. Off by default, toggle with `s`, configure with `S`. Title bar shows 🔔/🔕 indicator. Note: Claude Code's built-in notifications have a [known delay bug](https://github.com/anthropics/claude-code/issues/5186) — flaude's hook-based notifications fire immediately when the event occurs, no delay
 - **Custom session titles** -- displays titles set via Claude Code's `/rename` command, extracted from the session transcript
 - **Git worktree support** -- sessions are auto-grouped by git repo, worktrees grouped with main repo, branch names displayed
@@ -35,7 +36,9 @@ The hook dispatcher ships as a native Rust binary for fast invocation (~14ms vs 
 
 ### Terminal support
 
-**iTerm2 is strongly recommended.** It's the only terminal that exposes tab-level APIs, which flaude uses for precise session navigation — jump directly to the tab running a specific Claude session. Other terminals (Ghostty, Terminal.app, Warp, IntelliJ) are limited to bringing the app to the foreground; flaude can't switch to a specific tab within them.
+**iTerm2 is strongly recommended** for native terminal mode. It's the only terminal that exposes tab-level APIs for precise session navigation. Other terminals (Ghostty, Terminal.app, Warp, IntelliJ) are limited to bringing the app to the foreground.
+
+**Alternatively, the [tmux backend](docs/tmux.md) (experimental)** makes all terminals equally capable — send prompts, exit sessions, and navigate precisely regardless of which terminal you use.
 
 ### Install
 
@@ -81,8 +84,8 @@ flaude update           # Self-update to latest version
 | ----------- | -------------------------------------------------------------- |
 | `Enter`/`g` | Navigate to session's terminal (or rename group on header row) |
 | `n`         | Launch a new Claude session (directory picker)                 |
-| `p`         | Send a prompt to the selected session (iTerm2)                 |
-| `d`         | Exit the selected session (iTerm2)                             |
+| `p`         | Send a prompt to the selected session (iTerm2 / tmux)          |
+| `d`         | Exit the selected session (iTerm2 / tmux)                      |
 | `l`         | Cycle activity log mode (All / Summary / Tools)                |
 | `s`/`S`     | Toggle notifications / notification settings                   |
 | `t`         | Change theme (Textual theme picker with search)                |
@@ -127,4 +130,4 @@ Permission-waiting state is detected via Claude Code's `PermissionRequest` hook.
 - [setproctitle](https://github.com/dvarrazzo/py-setproctitle) >= 1.3
 - **Optional:** [Rust](https://www.rust-lang.org/tools/install) toolchain — if `cargo` is on PATH at install time, the native hook dispatcher is compiled and bundled. Without it, the Python fallback is used transparently.
 
-For detailed documentation on dashboard layout, terminals, notifications, configuration, and environment variables, see [docs/dashboard.md](docs/dashboard.md). Performance analysis of the Rust hook dispatcher is in [docs/rust-hook.md](docs/rust-hook.md). Known bugs are tracked in [docs/BUG.md](docs/BUG.md). Future plans are in [docs/TODO.md](docs/TODO.md). Release history is in the [changelog](CHANGELOG.md).
+For detailed documentation on dashboard layout, terminals, notifications, configuration, and environment variables, see [docs/dashboard.md](docs/dashboard.md). tmux backend docs are in [docs/tmux.md](docs/tmux.md). Performance analysis of the Rust hook dispatcher is in [docs/rust-hook.md](docs/rust-hook.md). Known bugs are tracked in [docs/BUG.md](docs/BUG.md). Future plans are in [docs/TODO.md](docs/TODO.md). Release history is in the [changelog](CHANGELOG.md).

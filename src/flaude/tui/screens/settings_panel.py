@@ -18,6 +18,7 @@ from flaude.constants import STALE_SESSION_TIMEOUT
 class _RowKind(Enum):
     TOGGLE = auto()
     NUMBER = auto()
+    CHOICE = auto()
     HEADER = auto()
 
 
@@ -25,14 +26,19 @@ class _SettingRow(NamedTuple):
     kind: _RowKind
     label: str
     path: tuple[str, ...] = ()
-    default: bool | float = False
+    default: bool | float | str = False
     min_val: float = 0
     max_val: float = 999
     step: float = 1
+    choices: tuple[str, ...] = ()
 
 
 # fmt: off
 ROWS: list[_SettingRow] = [
+    _SettingRow(_RowKind.HEADER, "Terminal"),
+    _SettingRow(_RowKind.CHOICE, "Launch backend",  ("launch_backend",),  "auto",   choices=("auto", "tmux")),
+    _SettingRow(_RowKind.CHOICE, "Tmux open mode",  ("tmux_open_mode",),  "inline", choices=("inline", "new_tab")),
+
     _SettingRow(_RowKind.HEADER, "Session"),
     _SettingRow(_RowKind.NUMBER, "Hide idle after (min)", ("soft_hide_minutes",), 30, min_val=1, max_val=STALE_SESSION_TIMEOUT // 60),
     _SettingRow(_RowKind.TOGGLE, "Auto-group by repo",    ("auto_group",), True),
@@ -211,12 +217,16 @@ class SettingsPanel(ModalScreen[dict | None]):
                 self._commit_edit()
             else:
                 self._adjust_number(row, 1)
+        elif row.kind == _RowKind.CHOICE:
+            self._cycle_choice(row, 1)
 
     def action_adjust(self, direction: int) -> None:
         row = ROWS[_INTERACTIVE_INDICES[self._nav_pos]]
         if row.kind == _RowKind.NUMBER:
             self._commit_edit()
             self._adjust_number(row, direction)
+        elif row.kind == _RowKind.CHOICE:
+            self._cycle_choice(row, direction)
 
     def action_confirm(self) -> None:
         self._commit_edit()
@@ -248,6 +258,16 @@ class SettingsPanel(ModalScreen[dict | None]):
         self._set_value(row, val)
         self._render_all()
 
+    def _cycle_choice(self, row: _SettingRow, direction: int) -> None:
+        current = self._get_value(row)
+        try:
+            idx = row.choices.index(current)
+        except ValueError:
+            idx = 0
+        idx = (idx + direction) % len(row.choices)
+        self._set_value(row, row.choices[idx])
+        self._render_all()
+
     def _commit_edit(self) -> None:
         """Parse the edit buffer and apply it to the current number row."""
         if not self._editing:
@@ -276,6 +296,16 @@ class SettingsPanel(ModalScreen[dict | None]):
                 val = self._get_value(row)
                 check = "[bold green]\\[x][/]" if val else "[dim]\\[ ][/]"
                 widget.update(f"{cursor}{row.label:<34} {check}")
+
+            elif row.kind == _RowKind.CHOICE:
+                val = self._get_value(row)
+                if is_selected:
+                    widget.update(
+                        f"{cursor}{row.label:<30} "
+                        f"[dim]\u25c0[/] [bold]{val}[/] [dim]\u25b6[/]"
+                    )
+                else:
+                    widget.update(f"{cursor}{row.label:<34} {val}")
 
             elif row.kind == _RowKind.NUMBER:
                 if is_selected and self._editing:
