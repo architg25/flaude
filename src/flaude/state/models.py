@@ -56,6 +56,15 @@ class LastTool(BaseModel):
     at: datetime
 
 
+class LoopInfo(BaseModel):
+    task_id: str
+    cron_expr: str
+    human_schedule: str
+    prompt: str
+    recurring: bool
+    created_at: str
+
+
 class SessionState(BaseModel):
     model_config = {"extra": "ignore"}
 
@@ -89,3 +98,4 @@ class SessionState(BaseModel):
     is_tmux: bool | None = None
     tmux_pane: str | None = None
     parent_terminal: str | None = None
+    loops: dict[str, LoopInfo] = Field(default_factory=dict)

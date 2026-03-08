@@ -1,6 +1,6 @@
 """Tests for StateManager — save, load, delete."""
 
-from flaude.state.models import SessionStatus
+from flaude.state.models import LoopInfo, SessionStatus
 
 from helpers import make_state
 
@@ -85,3 +85,34 @@ def test_atomic_write_produces_valid_json(mgr):
     parsed = json.loads(raw)
     assert parsed["session_id"] == "valid"
     assert parsed["tool_stats"] == {"Bash": 5, "Read": 12}
+
+
+class TestLoopsField:
+    def test_default_empty(self):
+        state = make_state()
+        assert state.loops == {}
+
+    def test_roundtrip(self, mgr):
+        loop = LoopInfo(
+            task_id="abcd1234",
+            cron_expr="*/5 * * * *",
+            human_schedule="Every 5 minutes",
+            prompt="check deploy",
+            recurring=True,
+            created_at="2026-03-08T12:00:00",
+        )
+        state = make_state(loops={"abcd1234": loop})
+        mgr.save_session(state)
+        loaded = mgr.load_session(state.session_id)
+        assert loaded.loops["abcd1234"].task_id == "abcd1234"
+        assert loaded.loops["abcd1234"].cron_expr == "*/5 * * * *"
+        assert loaded.loops["abcd1234"].human_schedule == "Every 5 minutes"
+        assert loaded.loops["abcd1234"].prompt == "check deploy"
+        assert loaded.loops["abcd1234"].recurring is True
+
+    def test_backward_compat_no_loops_field(self, mgr):
+        """Old state files without loops field load fine with empty dict."""
+        state = make_state()
+        mgr.save_session(state)
+        loaded = mgr.load_session(state.session_id)
+        assert loaded.loops == {}
