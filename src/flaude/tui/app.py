@@ -314,7 +314,10 @@ class FlaudeApp(App):
         if not session_id:
             self.notify("No session selected", severity="warning")
             return
+        self._navigate_to(session_id)
 
+    def _navigate_to(self, session_id: str) -> None:
+        """Navigate to a session by ID."""
         state = self._mgr.load_session(session_id)
         if not state:
             self.notify("Session not found", severity="error")
@@ -580,7 +583,6 @@ class FlaudeApp(App):
     def action_show_loops(self) -> None:
         def on_result(session_id: str | None) -> None:
             if session_id:
-                self._selected_id = session_id
-                self.action_goto_session()
+                self._navigate_to(session_id)
 
         self.push_screen(LoopPanel(lambda: self._active), on_result)
