@@ -14,11 +14,12 @@ def _kv(label: str, value: str, label_width: int = 8) -> str:
     return f"  [dim]{label:<{label_width}}[/] {value}"
 
 
+_EIGHTHS = " ▏▎▍▌▋▊▉█"
+
+
 def _context_bar(tokens: int, limit: int, width: int = 20) -> str:
-    """Render a smooth progress bar with token counts."""
+    """Render a sub-character smooth progress bar with token counts."""
     ratio = min(tokens / limit, 1.0) if limit else 0
-    filled = int(ratio * width)
-    empty = width - filled
 
     if ratio > 0.8:
         bar_style = "$error"
@@ -27,14 +28,24 @@ def _context_bar(tokens: int, limit: int, width: int = 20) -> str:
     else:
         bar_style = "$success"
 
+    # Sub-character precision: each cell has 8 gradations
+    total = ratio * width
+    full = int(total)
+    frac = int((total - full) * 8)
+    empty = width - full - (1 if frac else 0)
+
+    bar = "█" * full
+    if frac:
+        bar += _EIGHTHS[frac]
+    trail = "░" * empty
+
     ctx_str = format_token_count(tokens)
     if limit >= 1_000_000:
         limit_str = f"{limit // 1_000_000}M"
     else:
         limit_str = f"{limit // 1_000}K"
 
-    bar = f"[{bar_style}]{'▓' * filled}[/][dim]{'░' * empty}[/]"
-    return f"  {bar}  [{bar_style}]{ctx_str}[/] [dim]/ {limit_str}[/]"
+    return f"  [{bar_style}]{bar}[/][dim]{trail}[/]  [{bar_style}]{ctx_str}[/] [dim]/ {limit_str}[/]"
 
 
 def _sep() -> str:
