@@ -417,20 +417,8 @@ class SessionTable(DataTable):
 
         if not sessions:
             if self._last_order:
-                # Transition to empty state
                 self.clear()
                 self._last_order = []
-            if self.row_count == 0:
-                self.add_row(
-                    Text("No sessions", style="dim"),
-                    "",
-                    Text(
-                        "press n or start claude · existing sessions appear after their next hook fires · run flaude init if hooks not set up",
-                        style="dim italic",
-                    ),
-                    "",
-                    "",
-                )
             return
 
         sorted_sessions = _sort_sessions(sessions, auto_group, session_groups)

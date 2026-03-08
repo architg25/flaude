@@ -52,6 +52,7 @@ from flaude.tui.widgets.session_detail import SessionDetail
 from flaude.tui.widgets.permission_panel import PermissionPanel
 from flaude.tui.widgets.activity_log import ActivityLog
 from flaude.tui.widgets.footer_bar import FooterBar
+from flaude.tui.widgets.welcome_screen import WelcomeScreen
 
 
 class FlaudeApp(App):
@@ -91,6 +92,7 @@ class FlaudeApp(App):
         self._show_hidden = False
 
     def compose(self) -> ComposeResult:
+        yield WelcomeScreen(id="welcome-screen")
         with Horizontal(id="main-split"):
             with Vertical(id="left-pane"):
                 yield SessionTable(id="session-table")
@@ -169,6 +171,9 @@ class FlaudeApp(App):
                     hidden_count += 1
                 else:
                     visible[sid] = s
+
+        # Toggle welcome screen vs dashboard
+        self.screen.set_class(bool(active), "has-sessions")
 
         table = self.query_one(SessionTable)
         table.update_sessions(

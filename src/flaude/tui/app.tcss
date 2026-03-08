@@ -2,9 +2,23 @@ Screen {
     layout: vertical;
 }
 
+/* ── Welcome / Dashboard toggle ── */
+#welcome-screen {
+    display: block;
+}
+
 #main-split {
     layout: horizontal;
     height: 1fr;
+    display: none;
+}
+
+.has-sessions #welcome-screen {
+    display: none;
+}
+
+.has-sessions #main-split {
+    display: block;
 }
 
 #left-pane {
