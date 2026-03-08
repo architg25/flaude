@@ -23,6 +23,8 @@ _SUMMARIZERS: dict[str, object] = {
     "Glob": lambda inp: inp.get("pattern", ""),
     "Task": lambda inp: trunc(inp.get("prompt", ""), 60),
     "WebFetch": lambda inp: trunc(inp.get("url", ""), 60),
+    "CronCreate": lambda inp: f'{inp.get("cron", "")} {trunc(inp.get("prompt", ""), 50)}'.strip(),
+    "CronDelete": lambda inp: inp.get("id", ""),
 }
 
 

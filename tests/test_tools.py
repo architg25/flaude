@@ -59,3 +59,30 @@ class TestSummarizeTool:
     def test_missing_keys_return_empty(self, tool):
         """Summarizers handle empty dicts gracefully."""
         assert summarize_tool(tool, {}) == ""
+
+
+class TestCronSummarizers:
+    def test_cron_create(self):
+        result = summarize_tool(
+            "CronCreate",
+            {
+                "cron": "*/5 * * * *",
+                "prompt": "check if the deploy finished",
+            },
+        )
+        assert "*/5 * * * *" in result
+        assert "check if the deploy" in result
+
+    def test_cron_create_missing_fields(self):
+        assert summarize_tool("CronCreate", {}) == ""
+
+    def test_cron_delete(self):
+        result = summarize_tool("CronDelete", {"id": "abcd1234"})
+        assert result == "abcd1234"
+
+    def test_cron_delete_missing_id(self):
+        assert summarize_tool("CronDelete", {}) == ""
+
+    def test_cron_list_falls_through(self):
+        """CronList has no summarizer — returns tool name."""
+        assert summarize_tool("CronList", {}) == "CronList"
