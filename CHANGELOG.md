@@ -2,6 +2,10 @@
 
 ## 0.14 — Tmux backend & terminal-agnostic sessions
 
+### 0.14.1
+
+- Remove cosmetic hardcoded versions from `__init__.py` and `Cargo.toml` (real version derived from git tags at build time)
+
 ### 0.14.0
 
 - Add tmux backend for terminal-agnostic session management — no longer requires iTerm2

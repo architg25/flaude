@@ -1,6 +1,6 @@
 [package]
 name = "flaude-hook"
-version = "0.13.0"
+version = "0.0.0"  # cosmetic — real version derived from git tags
 edition = "2021"
 
 [[bin]]
