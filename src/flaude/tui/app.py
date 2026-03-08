@@ -580,9 +580,23 @@ class FlaudeApp(App):
     def action_help(self) -> None:
         self.push_screen(HelpDialog())
 
+    def _send_text_to(self, session_id: str, text: str) -> bool:
+        """Send text to a session. Returns True on success."""
+        state = self._mgr.load_session(session_id)
+        if not state:
+            return False
+        if state.is_tmux and state.tmux_pane:
+            return send_text_tmux(state.tmux_pane, text)
+        if state.terminal == "iTerm2" and state.tty:
+            return send_text_to_session(state.tty, text)
+        return False
+
     def action_show_loops(self) -> None:
         def on_result(session_id: str | None) -> None:
             if session_id:
                 self._navigate_to(session_id)
 
-        self.push_screen(LoopPanel(lambda: self._active), on_result)
+        self.push_screen(
+            LoopPanel(lambda: self._active, self._send_text_to),
+            on_result,
+        )

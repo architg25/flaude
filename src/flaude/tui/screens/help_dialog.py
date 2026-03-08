@@ -67,7 +67,10 @@ class HelpDialog(ModalScreen[None]):
             )
             yield Static("[bold]l[/]             Cycle Log Mode", classes="help-row")
             yield Static("[bold]t[/]             Change Theme", classes="help-row")
-            yield Static("[bold]L[/]             Loops Panel", classes="help-row")
+            yield Static(
+                "[bold]L[/]             Loops Panel (x cancel, X cancel all)",
+                classes="help-row",
+            )
             yield Static("[bold]?[/]             This Help", classes="help-row")
             yield Static("[bold]q[/]             Quit", classes="help-row")
             yield Static("[bold]Esc[/] Close", id="help-hint")
