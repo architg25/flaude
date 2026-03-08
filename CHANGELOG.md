@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15 — Loop Manager
+
+### 0.15.0
+
+- Add loop manager panel (`L` keybinding) — view scheduled tasks (loops/crons) across all sessions
+- Track CronCreate/CronDelete/CronList via PostToolUse hooks (Python + Rust parity)
+- DataTable with column headers, arrow key navigation, live refresh
+- Full prompt preview on row highlight
+- Enter on a loop row navigates to that session
+- Add CronCreate/CronDelete tool summarizers for activity log
+
 ## 0.14 — Tmux backend & terminal-agnostic sessions
 
 ### 0.14.1

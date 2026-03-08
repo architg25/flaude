@@ -29,6 +29,7 @@ The hook dispatcher ships as a native Rust binary for fast invocation (~14ms vs 
 - **Git worktree support** -- sessions are auto-grouped by git repo, worktrees grouped with main repo, branch names displayed
 - **Configurable grouping** -- auto-group by repo (default on), manual group assignment via `G` key, group renaming via Enter on header row. Manual groups override auto-groups. Persisted in config via `session_groups`
 - **Activity log** -- tail session transcripts in real time with three verbosity modes (All / Summary / Tools)
+- **Loop manager** -- view scheduled tasks (loops/crons) across all sessions in a dedicated panel (`L`). Shows cron expression, type (recurring/one-shot), and prompt for each job. Live-refreshes, arrow-key navigable, Enter navigates to the owning session. Full prompt preview on highlight
 - **Session detail panel** -- sectioned view with session info, status, timing, context ratio, last prompt, pending questions with plan approval details, and team membership info for agent team members
 - **Monitor-only hooks** -- never blocks Claude Code; users approve permissions in their own terminal as usual
 - **Theme customization** -- all colors adapt to the selected Textual theme, with persistence across restarts
@@ -86,6 +87,7 @@ flaude update           # Self-update to latest version
 | `n`         | Launch a new Claude session (directory picker)                 |
 | `p`         | Send a prompt to the selected session (iTerm2 / tmux)          |
 | `d`         | Exit the selected session (iTerm2 / tmux)                      |
+| `L`         | Loop manager panel (scheduled tasks across all sessions)       |
 | `l`         | Cycle activity log mode (All / Summary / Tools)                |
 | `s`/`S`     | Toggle notifications / notification settings                   |
 | `t`         | Change theme (Textual theme picker with search)                |
@@ -111,7 +113,8 @@ Hook events (stdin JSON)
         ├─▶ session_table.py     ← DataTable with status, context, mode columns
         ├─▶ session_detail.py    ← Right panel: full session info + pending questions
         ├─▶ permission_panel.py  ← Waiting sessions with question details
-        └─▶ activity_log.py     ← Transcript viewer (All/Summary/Tools modes)
+        ├─▶ activity_log.py     ← Transcript viewer (All/Summary/Tools modes)
+        └─▶ loop_panel.py       ← Modal: scheduled tasks (loops/crons) across sessions
 ```
 
 ### Permission detection

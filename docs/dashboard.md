@@ -100,6 +100,25 @@ Body text shows the pending question when available.
 - Each session only fires once per event (a second alert requires the session to start a new turn or leave and re-enter a waiting state)
 - Title bar shows 🔔 when notifications are on and 🔕 when off
 
+### Loop manager
+
+Press `L` to open the loop manager panel — a modal overlay showing all scheduled tasks (loops and crons) across every monitored session.
+
+| Column   | Description                                                  |
+| -------- | ------------------------------------------------------------ |
+| Session  | Project name + short session ID (shown on first row only)    |
+| ID       | 8-char hex job ID                                            |
+| Schedule | Cron expression (e.g. `*/5 * * * *`)                         |
+| Type     | ↻ recurring or ① one-shot                                    |
+| Prompt   | Truncated prompt text (full prompt shown below on highlight) |
+
+- **Live refresh** — data updates while the panel is open
+- **Arrow key navigation** — cursor moves between loop rows
+- **Enter** — navigates to the session that owns the selected loop
+- **Esc / L** — close the panel
+
+Loop data is captured from `CronCreate`, `CronDelete`, and `CronList` tool events via `PostToolUse` hooks. The `tool_response` field provides structured JSON with job ID, cron expression, schedule, prompt, and recurrence type.
+
 ## Supported terminals
 
 ### Native mode (launch backend: auto)
