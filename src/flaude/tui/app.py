@@ -232,6 +232,15 @@ class FlaudeApp(App):
             self._config.pop(key, None)
         save_config(self._config)
 
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Trigger immediate detail+log refresh when cursor moves to a new session."""
+        key = str(event.row_key.value) if event.row_key else ""
+        if key.startswith(REPO_HEADER_PREFIX) or key.startswith(GROUP_HEADER_PREFIX):
+            return
+        if key and key != self._selected_id:
+            self._selected_id = key
+            self._refresh_log()
+
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle Enter: navigate to session, or rename group if on a header."""
         key = str(event.row_key.value) if event.row_key else ""
