@@ -211,8 +211,10 @@ class FlaudeApp(App):
         log = self.query_one(ActivityLog)
         log.set_session_filter(selected_id)
         if selected_id and selected_id in active:
+            log.set_session_id(selected_id)
             log.set_transcript_path(active[selected_id].transcript_path)
         else:
+            log.set_session_id(None)
             log.set_transcript_path(None)
         log.refresh_log()
 
