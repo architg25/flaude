@@ -9,21 +9,13 @@ from flaude.formatting import format_uptime, format_token_count
 from flaude.state.models import SessionState, STATUS_INFO
 
 
-def _section_header(title: str, width: int = 30, style: str = "bold") -> str:
-    """Draw: ╶─── TITLE ───────────╴"""
-    padding = width - len(title) - 2
-    left = max(padding // 2, 1)
-    right = max(padding - left, 1)
-    return f"[{style}]╶{'─' * left} {title} {'─' * right}╴[/]"
-
-
-def _kv(label: str, value: str, label_width: int = 7) -> str:
-    """Render: Label   │ value"""
-    return f"  [dim]{label:<{label_width}}[/] [dim]│[/] {value}"
+def _kv(label: str, value: str, label_width: int = 8) -> str:
+    """Render a key-value pair with dim label."""
+    return f"  [dim]{label:<{label_width}}[/] {value}"
 
 
 def _context_bar(tokens: int, limit: int, width: int = 20) -> str:
-    """Render: ████████░░░░░░░ 269K/1M"""
+    """Render a smooth progress bar with token counts."""
     ratio = min(tokens / limit, 1.0) if limit else 0
     filled = int(ratio * width)
     empty = width - filled
@@ -41,8 +33,13 @@ def _context_bar(tokens: int, limit: int, width: int = 20) -> str:
     else:
         limit_str = f"{limit // 1_000}K"
 
-    bar = f"[{bar_style}]{'█' * filled}[/][dim]{'░' * empty}[/]"
-    return f"  {bar} [{bar_style}]{ctx_str}[/][dim]/{limit_str}[/]"
+    bar = f"[{bar_style}]{'▓' * filled}[/][dim]{'░' * empty}[/]"
+    return f"  {bar}  [{bar_style}]{ctx_str}[/] [dim]/ {limit_str}[/]"
+
+
+def _sep() -> str:
+    """Dim separator line."""
+    return "[dim]  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─[/]"
 
 
 class SessionDetail(Static):
@@ -58,7 +55,7 @@ class SessionDetail(Static):
         session_groups: dict[str, str] | None = None,
     ) -> None:
         if state is None:
-            self.update("[dim italic]  Select a session to view details[/]")
+            self.update("[dim italic]  Select a session[/]")
             self.border_title = "Detail"
             return
 
@@ -69,97 +66,93 @@ class SessionDetail(Static):
         else:
             repo_display = None
         project = repo_display or (Path(state.cwd).name if state.cwd else "?")
-        self.border_title = f" Detail ── {project} "
+        self.border_title = f" {project} "
 
         lines: list[str] = []
 
-        # ── Session ──
-        lines.append(_section_header("SESSION"))
-        lines.append(_kv("ID", state.session_id))
+        # ── Status + identity block ──
+        info = STATUS_INFO[state.status]
+        style = f"${info.theme_var} bold" if info.bold else f"${info.theme_var}"
+        lines.append(f"  [{style}]{info.indicator} {info.label}[/]")
+        lines.append(_kv("Model", f"[dim]{state.model or '?'}[/]"))
+        lines.append(_kv("Mode", state.permission_mode or "default"))
+        uptime = format_uptime(utcnow(), state.started_at)
+        start = state.started_at.strftime("%H:%M")
+        lines.append(_kv("Up", f"{uptime} [dim]· {start}[/]"))
+        if state.turn_started_at:
+            turn_secs = int((utcnow() - state.turn_started_at).total_seconds())
+            mins, secs = divmod(turn_secs, 60)
+            lines.append(_kv("Turn", f"{mins}m{secs:02d}s"))
+
+        # ── Context bar ──
+        if state.context_tokens > 0:
+            lines.append("")
+            limit = get_model_limit(state.model)
+            lines.append(_context_bar(state.context_tokens, limit))
+
+        # ── Location ──
+        lines.append("")
+        lines.append(_sep())
+        lines.append("")
+        lines.append(_kv("Dir", f"[dim]{state.cwd}[/]"))
+        if state.git_repo_root:
+            lines.append(_kv("Branch", state.git_branch or "[dim]detached[/]"))
+            if state.git_is_worktree:
+                lines.append(_kv("Tree", f"[dim]{state.cwd}[/]"))
+        if state.is_tmux:
+            parent = state.parent_terminal or "?"
+            lines.append(_kv("Term", f"{parent} [dim]· tmux[/]"))
+        else:
+            lines.append(_kv("Term", state.terminal or "?"))
+        lines.append(_kv("ID", f"[dim]{state.session_id[:12]}[/]"))
         if state.custom_title:
             lines.append(_kv("Name", state.custom_title))
-        lines.append(_kv("Dir", state.cwd))
         manual_group = (session_groups or {}).get(state.session_id)
         if manual_group:
             lines.append(_kv("Group", manual_group))
 
-        # ── Git ──
-        if state.git_repo_root:
-            lines.append("")
-            lines.append(_section_header("GIT"))
-            lines.append(_kv("Repo", repo_display))
-            lines.append(_kv("Branch", state.git_branch or "[dim]detached[/]"))
-            if state.git_is_worktree:
-                lines.append(_kv("Tree", state.cwd))
-            lines.append(_kv("Root", state.git_repo_root))
-
         # ── Team ──
         if state.team_name:
             lines.append("")
-            lines.append(_section_header("TEAM"))
+            lines.append(_sep())
+            lines.append("")
             lines.append(_kv("Team", state.team_name))
             if state.agent_name:
                 lines.append(_kv("Role", state.agent_name))
             if state.lead_session_id:
-                lines.append(_kv("Lead", state.lead_session_id[:8]))
-
-        # ── Status ──
-        lines.append("")
-        lines.append(_section_header("STATUS"))
-        info = STATUS_INFO[state.status]
-        style = f"${info.theme_var} bold" if info.bold else f"${info.theme_var}"
-        lines.append(_kv("Status", f"[{style}]{info.indicator} {info.label}[/]"))
-        if state.model:
-            lines.append(_kv("Model", state.model))
-        lines.append(_kv("Mode", state.permission_mode or "default"))
-        if state.is_tmux:
-            parent = state.parent_terminal or "?"
-            lines.append(_kv("Term", f"{parent} (tmux)"))
-        else:
-            lines.append(_kv("Term", state.terminal or "?"))
-
-        # ── Timing ──
-        lines.append("")
-        lines.append(_section_header("TIMING"))
-        lines.append(_kv("Up", format_uptime(utcnow(), state.started_at)))
-        lines.append(_kv("Start", state.started_at.strftime("%H:%M")))
-        if state.turn_started_at:
-            turn_secs = int((utcnow() - state.turn_started_at).total_seconds())
-            mins, secs = divmod(turn_secs, 60)
-            lines.append(_kv("Since", f"{mins}m{secs:02d}s"))
-
-        # ── Context ──
-        if state.context_tokens > 0:
-            lines.append("")
-            lines.append(_section_header("CONTEXT"))
-            limit = get_model_limit(state.model)
-            lines.append(_context_bar(state.context_tokens, limit))
+                lines.append(_kv("Lead", f"[dim]{state.lead_session_id[:8]}[/]"))
 
         # ── Last Prompt ──
         if state.last_prompt:
             lines.append("")
-            lines.append(_section_header("LAST PROMPT"))
-            lines.append(f"  [italic]{state.last_prompt}[/]")
+            lines.append(_sep())
+            lines.append("")
+            prompt = state.last_prompt
+            if len(prompt) > 80:
+                prompt = prompt[:77] + "..."
+            lines.append(f"  [italic]{prompt}[/]")
 
         # ── Pending Question ──
         pq = state.pending_question
         if pq:
             lines.append("")
+            lines.append(_sep())
+            lines.append("")
             if "questions" in pq:
-                lines.append(_section_header("PENDING QUESTION", style="$warning bold"))
+                lines.append("  [$warning bold]Pending Question[/]")
                 for q in pq["questions"]:
                     lines.append(f"  [italic]{q.get('question', '')}[/]")
                     for opt in q.get("options", []):
                         label = opt.get("label", "")
                         desc = opt.get("description", "")
                         if desc:
-                            lines.append(f"    [dim]├─[/] [bold]{label}[/]: {desc}")
+                            lines.append(f"    [dim]·[/] [bold]{label}[/]  {desc}")
                         else:
-                            lines.append(f"    [dim]├─[/] [bold]{label}[/]")
+                            lines.append(f"    [dim]·[/] [bold]{label}[/]")
             else:
-                lines.append(_section_header("PLAN APPROVAL", style="$warning bold"))
+                lines.append("  [$warning bold]Plan Approval[/]")
                 for p in pq.get("allowedPrompts", []):
-                    lines.append(f"  [dim]├─[/] {p.get('prompt', '')}")
+                    lines.append(f"  [dim]·[/] {p.get('prompt', '')}")
 
         content = "\n".join(lines)
         if content != getattr(self, "_last_content", None):

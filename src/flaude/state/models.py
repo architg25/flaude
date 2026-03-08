@@ -32,14 +32,12 @@ class StatusInfo:
 STATUS_INFO: dict[SessionStatus, StatusInfo] = {
     SessionStatus.NEW: StatusInfo("NEW", "◆", "accent", True, 2),
     SessionStatus.WORKING: StatusInfo("RUNNING", "▶", "success", True, 3),
-    SessionStatus.IDLE: StatusInfo("IDLE", "●", "text-muted", False, 4),
-    SessionStatus.WAITING_PERMISSION: StatusInfo(
-        "PERMISSION", "⏳", "warning", True, 0
-    ),
-    SessionStatus.WAITING_ANSWER: StatusInfo("INPUT", "❓", "accent", True, 0),
-    SessionStatus.PLAN: StatusInfo("PLAN", "📋", "warning", True, 0),
+    SessionStatus.IDLE: StatusInfo("IDLE", "○", "text-muted", False, 4),
+    SessionStatus.WAITING_PERMISSION: StatusInfo("PERMISSION", "◈", "warning", True, 0),
+    SessionStatus.WAITING_ANSWER: StatusInfo("INPUT", "◇", "accent", True, 0),
+    SessionStatus.PLAN: StatusInfo("PLAN", "▷", "warning", True, 0),
     SessionStatus.ERROR: StatusInfo("ERROR", "✖", "error", True, 1),
-    SessionStatus.ENDED: StatusInfo("ENDED", "■", "text-muted", False, 5),
+    SessionStatus.ENDED: StatusInfo("ENDED", "·", "text-muted", False, 5),
 }
 
 

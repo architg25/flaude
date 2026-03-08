@@ -2,6 +2,10 @@ Screen {
     layout: vertical;
 }
 
+Footer {
+    background: $surface;
+}
+
 #main-split {
     layout: horizontal;
     height: 1fr;
@@ -12,39 +16,47 @@ Screen {
     layout: vertical;
 }
 
-/* ── Session Table (primary) ── */
+/* ── Session Table ── */
 #session-table {
     height: 2fr;
     margin: 0 1;
-    border: double $primary;
+    border: round $surface-lighten-1;
     border-title-color: $text;
     border-title-style: bold;
-    border-title-background: $primary 20%;
     border-subtitle-color: $text-muted;
     border-subtitle-style: italic;
     padding: 0 1;
 }
 
-/* ── Permission/Waiting Panel (secondary) ── */
+#session-table > .datatable--header {
+    text-style: bold;
+    color: $text-muted;
+}
+
+#session-table > .datatable--cursor {
+    background: $primary 15%;
+    color: $text;
+}
+
+/* ── Permission/Waiting Panel ── */
 #permission-panel {
     height: 1fr;
     min-height: 5;
     margin: 0 1;
-    border: heavy $surface-lighten-2;
+    border: round $surface-lighten-1;
     border-title-color: $text-muted;
     border-title-style: bold;
+    padding: 0 1;
 }
 
-/* When sessions are actually waiting, promote to primary-style */
 #permission-panel.has-waiting {
-    border: double $warning;
+    border: round $warning 50%;
     border-title-color: $warning;
-    border-title-style: bold;
-    border-title-background: $warning 15%;
+    background: $warning 5%;
 }
 
 PermissionPanel .urgent {
-    background: $warning 15%;
+    background: $warning 10%;
 }
 
 #no-permissions {
@@ -53,25 +65,24 @@ PermissionPanel .urgent {
     padding: 1 2;
 }
 
-/* ── Activity Log (secondary) ── */
+/* ── Activity Log ── */
 #activity-log {
     height: 1fr;
     margin: 0 1;
-    border: heavy $surface-lighten-2;
+    border: round $surface-lighten-1;
     border-title-color: $text-muted;
     border-title-style: bold;
     padding: 0 1;
 }
 
-/* ── Detail Panel (primary) ── */
+/* ── Detail Panel ── */
 #session-detail {
     width: 2fr;
     min-width: 35;
     margin: 0 1 0 0;
     padding: 1 2;
-    border: double $primary;
+    border: round $surface-lighten-1;
     border-title-color: $text;
     border-title-style: bold;
-    border-title-background: $primary 20%;
     overflow-y: auto;
 }

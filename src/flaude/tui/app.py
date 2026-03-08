@@ -7,7 +7,7 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Header, Footer, DataTable
+from textual.widgets import Footer, DataTable
 
 from flaude.config import load_config, save_config, migrate_notifications_config
 from flaude.constants import (
@@ -56,7 +56,7 @@ class FlaudeApp(App):
     """Claude Code session manager dashboard."""
 
     CSS_PATH = "app.tcss"
-    TITLE = "🤖 Flaude"
+    TITLE = "flaude"
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
@@ -89,7 +89,6 @@ class FlaudeApp(App):
         self._show_hidden = False
 
     def compose(self) -> ComposeResult:
-        yield Header()
         with Horizontal(id="main-split"):
             with Vertical(id="left-pane"):
                 yield SessionTable(id="session-table")

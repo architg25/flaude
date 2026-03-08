@@ -17,7 +17,7 @@ GROUP_HEADER_PREFIX = "__group__"
 
 
 def _header_text(display: str) -> Text:
-    return Text(f"── {display} ──", style="bold dim")
+    return Text(f"▍{display}", style="bold")
 
 
 def _format_project(state: SessionState, max_len: int = 25) -> str:
