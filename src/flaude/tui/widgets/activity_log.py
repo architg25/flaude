@@ -23,6 +23,7 @@ class ActivityLog(RichLog):
         # Track file position for incremental reads
         self._tools_last_size: int = 0
         self._transcript_last_size: int = 0
+        self._transcript_tail_skip: bool = False
         # Per-session activity cache
         self._session_id: str | None = None
         self._cache_path: Path | None = None
@@ -60,9 +61,19 @@ class ActivityLog(RichLog):
         if path == self._transcript_path:
             return
         self._transcript_path = path
-        # Reset on path change
         self.clear()
-        self._transcript_last_size = 0
+        if path:
+            # Tail-load: start near the end for fast initial display
+            try:
+                size = Path(path).stat().st_size
+                self._transcript_last_size = max(0, size - 51200)  # last 50KB
+                self._transcript_tail_skip = self._transcript_last_size > 0
+            except OSError:
+                self._transcript_last_size = 0
+                self._transcript_tail_skip = False
+        else:
+            self._transcript_last_size = 0
+            self._transcript_tail_skip = False
 
     def cycle_mode(self) -> None:
         idx = MODES.index(self._mode)
@@ -154,6 +165,12 @@ class ActivityLog(RichLog):
                 f.seek(self._transcript_last_size)
                 new_content = f.read()
                 self._transcript_last_size = f.tell()
+            # Skip first partial line when we seeked to mid-file
+            if self._transcript_tail_skip and new_content:
+                first_nl = new_content.find("\n")
+                if first_nl != -1:
+                    new_content = new_content[first_nl + 1 :]
+                self._transcript_tail_skip = False
             for line in new_content.strip().splitlines():
                 formatted = self._format_transcript_entry(line)
                 if formatted:
