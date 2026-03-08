@@ -5,7 +5,7 @@ from pathlib import Path
 
 from textual.widgets import RichLog
 
-from flaude.constants import ACTIVITY_LOG
+from flaude.constants import ACTIVITY_LOG, LOGS_DIR
 from flaude.tools import summarize_tool
 
 MODES = ["all", "summary", "tools"]
@@ -23,6 +23,10 @@ class ActivityLog(RichLog):
         # Track file position for incremental reads
         self._tools_last_size: int = 0
         self._transcript_last_size: int = 0
+        # Per-session activity cache
+        self._session_id: str | None = None
+        self._cache_path: Path | None = None
+        self._cache_last_size: int = 0
 
     @property
     def mode(self) -> str:
@@ -30,6 +34,16 @@ class ActivityLog(RichLog):
 
     def on_mount(self) -> None:
         self.border_title = f"Activity ── {MODE_LABELS[self._mode]}"
+
+    def set_session_id(self, session_id: str | None) -> None:
+        """Set the full session ID for cache file lookup."""
+        if session_id == self._session_id:
+            return
+        self._session_id = session_id
+        self._cache_path = (
+            LOGS_DIR / f"{session_id}.activity.jsonl" if session_id else None
+        )
+        self._cache_last_size = 0
 
     def set_session_filter(self, session_id: str | None) -> None:
         prefix = session_id[:8] if session_id else None
@@ -40,6 +54,7 @@ class ActivityLog(RichLog):
         self.clear()
         self._tools_last_size = 0
         self._transcript_last_size = 0
+        self._cache_last_size = 0
 
     def set_transcript_path(self, path: str | None) -> None:
         if path == self._transcript_path:
@@ -57,6 +72,7 @@ class ActivityLog(RichLog):
         self.clear()
         self._tools_last_size = 0
         self._transcript_last_size = 0
+        self._cache_last_size = 0
         self.refresh_log()
 
     def refresh_log(self) -> None:
@@ -66,7 +82,14 @@ class ActivityLog(RichLog):
             self._load_transcript()
 
     def _load_tools_log(self) -> None:
-        """Load new lines from the hook activity log (tools mode)."""
+        """Load from per-session activity cache (fast) or global log (fallback)."""
+        if self._cache_path and self._cache_path.exists():
+            self._load_from_cache()
+        else:
+            self._load_from_global_log()
+
+    def _load_from_global_log(self) -> None:
+        """Load new lines from the global hook activity log (fallback)."""
         if not ACTIVITY_LOG.exists():
             return
         try:
@@ -85,6 +108,30 @@ class ActivityLog(RichLog):
                 if self._session_filter and f"[{self._session_filter}]" not in line:
                     continue
                 self.write(f"[dim]│[/] {line}")
+        except OSError:
+            pass
+
+    def _load_from_cache(self) -> None:
+        """Load new entries from the per-session activity cache."""
+        try:
+            size = self._cache_path.stat().st_size
+            if size < self._cache_last_size:
+                self.clear()
+                self._cache_last_size = 0
+            if size == self._cache_last_size:
+                return
+            with open(self._cache_path) as f:
+                f.seek(self._cache_last_size)
+                new_content = f.read()
+                self._cache_last_size = f.tell()
+            for line in new_content.strip().splitlines():
+                try:
+                    entry = json.loads(line)
+                    formatted = _format_cache_entry(entry)
+                    if formatted:
+                        self.write(formatted)
+                except json.JSONDecodeError:
+                    continue
         except OSError:
             pass
 
@@ -177,3 +224,28 @@ class ActivityLog(RichLog):
                 continue
 
         return None
+
+
+def _format_cache_entry(entry: dict) -> str | None:
+    """Format a per-session activity cache JSONL entry for display."""
+    ev = entry.get("ev", "")
+    ts = entry.get("ts", "")[11:]  # HH:MM:SS from ISO timestamp
+    if ev == "PreToolUse":
+        tool = entry.get("tool", "?")
+        summary = entry.get("sum", "")
+        return f"[dim]{ts}[/] ⚙ [cyan bold]{tool}[/] [dim]{summary}[/]"
+    elif ev == "PostToolUse":
+        return None  # Don't show post — pre already shows the tool
+    elif ev == "UserPrompt":
+        text = entry.get("text", "")
+        return f"[dim]{ts}[/] [dim]▸ {text}[/]"
+    elif ev == "Stop":
+        return f"[dim]{ts}[/] [dim]● idle[/]"
+    elif ev == "SessionStart":
+        return f"[dim]{ts}[/] [bold]◆ session started[/]"
+    elif ev == "PermissionRequest":
+        tool = entry.get("tool", "?")
+        return f"[dim]{ts}[/] ⏳ [yellow]permission[/] {tool}"
+    elif ev == "SubagentStop":
+        return f"[dim]{ts}[/] [dim]↩ subagent done[/]"
+    return None
