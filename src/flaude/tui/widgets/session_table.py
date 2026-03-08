@@ -99,6 +99,10 @@ _MODE_ABBREV = {
     "acceptEdits": "edit",
 }
 
+_TABLE_LABEL_ABBREV = {
+    "PERMISSION": "PERM",
+}
+
 
 def _abbrev_terminal(name: str) -> str:
     return _TERMINAL_ABBREV.get(name, name)
@@ -122,8 +126,9 @@ def _build_row_data(
         duration = format_compact_duration(now, state.turn_started_at)
     else:
         duration = format_compact_duration(now, state.last_event_at)
+    short_label = _TABLE_LABEL_ABBREV.get(info.label, info.label)
     status_text = Text(
-        f"{tree_prefix}{info.indicator} {info.label} {duration}",
+        f"{tree_prefix}{info.indicator} {short_label} {duration}",
         style=style,
         justify="center",
     )
