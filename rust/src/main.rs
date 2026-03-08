@@ -152,6 +152,16 @@ struct LastTool {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+struct LoopInfo {
+    task_id: String,
+    cron_expr: String,
+    human_schedule: String,
+    prompt: String,
+    recurring: bool,
+    created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct SessionState {
     session_id: String,
     #[serde(default)]
@@ -210,6 +220,8 @@ struct SessionState {
     tmux_pane: Option<String>,
     #[serde(default)]
     parent_terminal: Option<String>,
+    #[serde(default)]
+    loops: HashMap<String, LoopInfo>,
 }
 
 fn default_permission_mode() -> String {
@@ -317,6 +329,12 @@ fn summarize_tool(tool_name: &str, tool_input: &serde_json::Value) -> String {
         "Glob" => get_str("pattern"),
         "Task" => trunc(&get_str("prompt"), 60),
         "WebFetch" => trunc(&get_str("url"), 60),
+        "CronCreate" => {
+            let cron = get_str("cron");
+            let prompt = trunc(&get_str("prompt"), 50);
+            format!("{cron} {prompt}").trim().to_string()
+        }
+        "CronDelete" => get_str("id"),
         _ => tool_name.to_string(),
     }
 }
@@ -758,6 +776,7 @@ fn load_or_create(event: &serde_json::Value) -> SessionState {
             is_tmux: None,
             tmux_pane: None,
             parent_terminal: None,
+            loops: HashMap::new(),
         }
     });
 
@@ -879,6 +898,7 @@ fn handle_session_start(event: &serde_json::Value) {
         is_tmux: None,
         tmux_pane: None,
         parent_terminal: None,
+        loops: HashMap::new(),
     };
     let (repo_root, branch, is_wt) = get_git_info(&state.cwd);
     state.git_repo_root = Some(repo_root.unwrap_or_default());
@@ -955,6 +975,58 @@ fn handle_post_tool_use(event: &serde_json::Value) {
         SessionStatus::WaitingAnswer | SessionStatus::Plan | SessionStatus::WaitingPermission
     ) {
         state.status = SessionStatus::Working;
+    }
+
+    // Cron/loop capture from structured tool_response
+    if let Some(tool_response) = event.get("tool_response").and_then(|v| v.as_object()) {
+        match tool_name.as_str() {
+            "CronCreate" => {
+                if let Some(task_id) = tool_response.get("id").and_then(|v| v.as_str()) {
+                    if !task_id.is_empty() {
+                        let tool_input = event.get("tool_input").cloned()
+                            .unwrap_or(serde_json::Value::Object(Default::default()));
+                        let cron_expr = tool_input.get("cron").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let prompt = tool_input.get("prompt").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        state.loops.insert(task_id.to_string(), LoopInfo {
+                            task_id: task_id.to_string(),
+                            cron_expr,
+                            human_schedule: tool_response.get("humanSchedule").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            prompt,
+                            recurring: tool_response.get("recurring").and_then(|v| v.as_bool()).unwrap_or(true),
+                            created_at: utcnow().format("%Y-%m-%dT%H:%M:%S").to_string(),
+                        });
+                    }
+                }
+            }
+            "CronDelete" => {
+                if let Some(task_id) = tool_response.get("id").and_then(|v| v.as_str()) {
+                    state.loops.remove(task_id);
+                }
+            }
+            "CronList" => {
+                if let Some(jobs) = tool_response.get("jobs").and_then(|v| v.as_array()) {
+                    let mut new_loops = HashMap::new();
+                    for job in jobs {
+                        let tid = job.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                        if tid.is_empty() { continue; }
+                        let existing = state.loops.get(tid);
+                        new_loops.insert(tid.to_string(), LoopInfo {
+                            task_id: tid.to_string(),
+                            cron_expr: job.get("cron").and_then(|v| v.as_str())
+                                .unwrap_or(existing.map(|e| e.cron_expr.as_str()).unwrap_or(""))
+                                .to_string(),
+                            human_schedule: job.get("humanSchedule").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            prompt: job.get("prompt").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            recurring: job.get("recurring").and_then(|v| v.as_bool()).unwrap_or(true),
+                            created_at: existing.map(|e| e.created_at.clone())
+                                .unwrap_or_else(|| utcnow().format("%Y-%m-%dT%H:%M:%S").to_string()),
+                        });
+                    }
+                    state.loops = new_loops;
+                }
+            }
+            _ => {}
+        }
     }
 
     save_session(&state);
