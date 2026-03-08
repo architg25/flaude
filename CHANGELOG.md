@@ -2,6 +2,11 @@
 
 ## 0.15 — Loop Manager
 
+### 0.15.19+
+
+- Welcome screen with ASCII logo, actions, and tips when no sessions active
+- Centered column headers and cell content
+
 ### 0.15.1 – 0.15.18
 
 **Per-session activity cache**
