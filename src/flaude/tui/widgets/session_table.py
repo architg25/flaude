@@ -90,7 +90,7 @@ _TERMINAL_ABBREV = {
     "Ghostty": "Gh",
     "Terminal": "Trm",
     "Warp": "Wrp",
-    "IntelliJ": "IJ",
+    "IntelliJ": "ItJ",
 }
 
 _MODE_ABBREV = {
