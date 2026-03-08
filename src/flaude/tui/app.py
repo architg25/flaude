@@ -60,20 +60,18 @@ class FlaudeApp(App):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("g", "goto_session", "Go to Session"),
-        Binding("n", "new_session", "New Claude Session"),
-        Binding("p", "send_prompt", "Send Prompt"),
-        Binding("d", "exit_session", "Exit Session"),
-        Binding("l", "cycle_log_mode", "Log Mode"),
-        Binding(
-            "s", "toggle_notifications", "Notif Toggle/Settings", key_display="s/S"
-        ),
-        Binding("S", "settings", "Settings", show=False),
+        Binding("g", "goto_session", "Goto"),
+        Binding("n", "new_session", "New"),
+        Binding("p", "send_prompt", "Prompt"),
+        Binding("d", "exit_session", "Exit"),
+        Binding("l", "cycle_log_mode", "Log"),
+        Binding("s", "toggle_notifications", "Notif"),
+        Binding("S", "settings", "Settings"),
         Binding("G", "assign_group", "Assign Group", show=False),
-        Binding("h", "toggle_hidden", "Show Hidden"),
-        Binding("t", "change_theme", "Theme"),
+        Binding("h", "toggle_hidden", "Hidden"),
+        Binding("t", "change_theme", "Theme", show=False),
         Binding("question_mark", "help", "Help"),
-        Binding("L", "show_loops", "Loops", show=False),
+        Binding("L", "show_loops", "Loops"),
     ]
 
     def __init__(self) -> None:
