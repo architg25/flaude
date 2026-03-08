@@ -19,7 +19,7 @@ from flaude.hooks.dispatcher import (
     _load_or_create,
     _log,
 )
-from flaude.state.models import SessionStatus
+from flaude.state.models import LoopInfo, SessionStatus
 
 
 # ---------------------------------------------------------------------------
@@ -490,3 +490,221 @@ class TestLoadOrCreate:
         event = {"session_id": "pm", "permission_mode": "plan"}
         state = _load_or_create(event, mgr)
         assert state.permission_mode == "plan"
+
+
+# ---------------------------------------------------------------------------
+# Cron/loop capture
+# ---------------------------------------------------------------------------
+
+
+class TestCronCreateCapture:
+    def test_stores_loop_from_post_tool_use(self, mgr, no_rules):
+        """PostToolUse CronCreate with tool_response creates a LoopInfo."""
+        state = make_state("cron-create")
+        mgr.save_session(state)
+
+        _handle_post_tool_use(
+            {
+                "session_id": "cron-create",
+                "hook_event_name": "PostToolUse",
+                "tool_name": "CronCreate",
+                "tool_input": {
+                    "cron": "*/5 * * * *",
+                    "prompt": "check deploy",
+                    "recurring": True,
+                },
+                "tool_response": {
+                    "id": "abcd1234",
+                    "humanSchedule": "Every 5 minutes",
+                    "recurring": True,
+                    "durable": False,
+                },
+            },
+            mgr,
+        )
+        loaded = mgr.load_session("cron-create")
+        assert "abcd1234" in loaded.loops
+        loop = loaded.loops["abcd1234"]
+        assert loop.cron_expr == "*/5 * * * *"
+        assert loop.human_schedule == "Every 5 minutes"
+        assert loop.prompt == "check deploy"
+        assert loop.recurring is True
+
+    def test_ignores_missing_id(self, mgr, no_rules):
+        """CronCreate with empty tool_response doesn't crash."""
+        state = make_state("cron-noid")
+        mgr.save_session(state)
+
+        _handle_post_tool_use(
+            {
+                "session_id": "cron-noid",
+                "hook_event_name": "PostToolUse",
+                "tool_name": "CronCreate",
+                "tool_input": {"cron": "*/5 * * * *", "prompt": "test"},
+                "tool_response": {},
+            },
+            mgr,
+        )
+        loaded = mgr.load_session("cron-noid")
+        assert loaded.loops == {}
+
+    def test_handles_string_tool_response(self, mgr, no_rules):
+        """If tool_response is a string (unexpected), don't crash."""
+        state = make_state("cron-str")
+        mgr.save_session(state)
+
+        _handle_post_tool_use(
+            {
+                "session_id": "cron-str",
+                "hook_event_name": "PostToolUse",
+                "tool_name": "CronCreate",
+                "tool_input": {"cron": "*/5 * * * *", "prompt": "test"},
+                "tool_response": "Scheduled recurring job abcd1234",
+            },
+            mgr,
+        )
+        loaded = mgr.load_session("cron-str")
+        assert loaded.loops == {}
+
+
+class TestCronDeleteCapture:
+    def test_removes_loop(self, mgr, no_rules):
+        loop = LoopInfo(
+            task_id="abcd1234",
+            cron_expr="*/5 * * * *",
+            human_schedule="Every 5 minutes",
+            prompt="check",
+            recurring=True,
+            created_at="2026-03-08T12:00:00",
+        )
+        state = make_state("cron-del", loops={"abcd1234": loop})
+        mgr.save_session(state)
+
+        _handle_post_tool_use(
+            {
+                "session_id": "cron-del",
+                "hook_event_name": "PostToolUse",
+                "tool_name": "CronDelete",
+                "tool_response": {"id": "abcd1234"},
+            },
+            mgr,
+        )
+        loaded = mgr.load_session("cron-del")
+        assert "abcd1234" not in loaded.loops
+
+    def test_delete_nonexistent_is_noop(self, mgr, no_rules):
+        state = make_state("cron-del-noop")
+        mgr.save_session(state)
+
+        _handle_post_tool_use(
+            {
+                "session_id": "cron-del-noop",
+                "hook_event_name": "PostToolUse",
+                "tool_name": "CronDelete",
+                "tool_response": {"id": "nonexist"},
+            },
+            mgr,
+        )
+        loaded = mgr.load_session("cron-del-noop")
+        assert loaded.loops == {}
+
+
+class TestCronListReconcile:
+    def test_replaces_loops_with_active_jobs(self, mgr, no_rules):
+        """CronList reconciles: replaces loops dict with what's actually active."""
+        old_loop = LoopInfo(
+            task_id="old11111",
+            cron_expr="*/10 * * * *",
+            human_schedule="Every 10 minutes",
+            prompt="old job",
+            recurring=True,
+            created_at="2026-03-08T10:00:00",
+        )
+        state = make_state("cron-list", loops={"old11111": old_loop})
+        mgr.save_session(state)
+
+        _handle_post_tool_use(
+            {
+                "session_id": "cron-list",
+                "hook_event_name": "PostToolUse",
+                "tool_name": "CronList",
+                "tool_response": {
+                    "jobs": [
+                        {
+                            "id": "new22222",
+                            "cron": "*/2 * * * *",
+                            "humanSchedule": "Every 2 minutes",
+                            "prompt": "new job",
+                            "recurring": True,
+                            "durable": False,
+                        }
+                    ]
+                },
+            },
+            mgr,
+        )
+        loaded = mgr.load_session("cron-list")
+        assert "old11111" not in loaded.loops
+        assert "new22222" in loaded.loops
+        assert loaded.loops["new22222"].cron_expr == "*/2 * * * *"
+        assert loaded.loops["new22222"].prompt == "new job"
+
+    def test_empty_list_clears_loops(self, mgr, no_rules):
+        loop = LoopInfo(
+            task_id="gone1111",
+            cron_expr="*/5 * * * *",
+            human_schedule="Every 5 minutes",
+            prompt="expired",
+            recurring=True,
+            created_at="2026-03-08T10:00:00",
+        )
+        state = make_state("cron-list-empty", loops={"gone1111": loop})
+        mgr.save_session(state)
+
+        _handle_post_tool_use(
+            {
+                "session_id": "cron-list-empty",
+                "hook_event_name": "PostToolUse",
+                "tool_name": "CronList",
+                "tool_response": {"jobs": []},
+            },
+            mgr,
+        )
+        loaded = mgr.load_session("cron-list-empty")
+        assert loaded.loops == {}
+
+    def test_preserves_created_at_from_existing(self, mgr, no_rules):
+        """When CronList sees a job we already have, preserve our created_at."""
+        existing = LoopInfo(
+            task_id="keep1111",
+            cron_expr="*/5 * * * *",
+            human_schedule="Every 5 minutes",
+            prompt="check",
+            recurring=True,
+            created_at="2026-03-08T10:00:00",
+        )
+        state = make_state("cron-list-keep", loops={"keep1111": existing})
+        mgr.save_session(state)
+
+        _handle_post_tool_use(
+            {
+                "session_id": "cron-list-keep",
+                "hook_event_name": "PostToolUse",
+                "tool_name": "CronList",
+                "tool_response": {
+                    "jobs": [
+                        {
+                            "id": "keep1111",
+                            "cron": "*/5 * * * *",
+                            "humanSchedule": "Every 5 minutes",
+                            "prompt": "check",
+                            "recurring": True,
+                            "durable": False,
+                        }
+                    ]
+                },
+            },
+            mgr,
+        )
+        loaded = mgr.load_session("cron-list-keep")
+        assert loaded.loops["keep1111"].created_at == "2026-03-08T10:00:00"

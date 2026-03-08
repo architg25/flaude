@@ -24,7 +24,7 @@ from flaude.git import get_git_info
 from flaude.rules.engine import RulesEngine
 from flaude.state.manager import StateManager
 from flaude.hooks.teams import read_lead_session_id
-from flaude.state.models import LastTool, SessionState, SessionStatus
+from flaude.state.models import LastTool, LoopInfo, SessionState, SessionStatus
 from flaude.tools import summarize_tool, trunc
 
 
@@ -449,6 +449,45 @@ def _handle_post_tool_use(event: dict, sm: StateManager) -> None:
         SessionStatus.WAITING_PERMISSION,
     ):
         state.status = SessionStatus.WORKING
+
+    # Cron/loop capture from structured tool_response
+    tool_response = event.get("tool_response")
+    if isinstance(tool_response, dict):
+        if tool_name == "CronCreate":
+            task_id = tool_response.get("id", "")
+            if task_id:
+                tool_input = event.get("tool_input", {})
+                state.loops[task_id] = LoopInfo(
+                    task_id=task_id,
+                    cron_expr=tool_input.get("cron", ""),
+                    human_schedule=tool_response.get("humanSchedule", ""),
+                    prompt=tool_input.get("prompt", ""),
+                    recurring=tool_response.get("recurring", True),
+                    created_at=utcnow().isoformat(),
+                )
+        elif tool_name == "CronDelete":
+            task_id = tool_response.get("id", "")
+            state.loops.pop(task_id, None)
+        elif tool_name == "CronList":
+            jobs = tool_response.get("jobs", [])
+            new_loops: dict[str, LoopInfo] = {}
+            for job in jobs:
+                tid = job.get("id", "")
+                if not tid:
+                    continue
+                existing = state.loops.get(tid)
+                new_loops[tid] = LoopInfo(
+                    task_id=tid,
+                    cron_expr=job.get("cron", existing.cron_expr if existing else ""),
+                    human_schedule=job.get("humanSchedule", ""),
+                    prompt=job.get("prompt", ""),
+                    recurring=job.get("recurring", True),
+                    created_at=(
+                        existing.created_at if existing else utcnow().isoformat()
+                    ),
+                )
+            state.loops = new_loops
+
     sm.save_session(state)
     _log(state.session_id, "PostToolUse", tool_name)
 
