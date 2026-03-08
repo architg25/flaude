@@ -15,6 +15,13 @@ STATE_DIR = Path(os.environ.get("FLAUDE_STATE_DIR", "/tmp/flaude"))
 SESSIONS_DIR = STATE_DIR / "state"
 LOGS_DIR = STATE_DIR / "logs"
 ACTIVITY_LOG = LOGS_DIR / "activity.log"
+
+
+def session_activity_path(session_id: str) -> Path:
+    """Return the per-session activity cache path."""
+    return LOGS_DIR / f"{session_id}.activity.jsonl"
+
+
 DASHBOARD_PID = STATE_DIR / "dashboard.pid"
 
 RULES_PATH = Path(
