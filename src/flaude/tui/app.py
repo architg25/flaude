@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from textual.app import App, ComposeResult
@@ -105,15 +106,15 @@ class FlaudeApp(App):
         enabled = self._config.get("notifications", {}).get("enabled", False)
         self.query_one("#footer-bar", FooterBar).set_notifications(enabled)
 
-    def on_mount(self) -> None:
-        scan_preexisting_sessions(self._mgr)
+    async def on_mount(self) -> None:
+        await asyncio.to_thread(scan_preexisting_sessions, self._mgr)
         self._sync_notifier()
         self._sync_footer()
         self.set_interval(TUI_REFRESH_INTERVAL, self._refresh_sessions)
         self.set_interval(TUI_REFRESH_INTERVAL * 2, self._refresh_log)
         self.set_interval(30.0, self._schedule_cleanup)
-        self._refresh_sessions()
-        self._refresh_log()
+        await self._refresh_sessions()
+        await self._refresh_log()
         self.run_worker(self._check_for_update, thread=True)
 
     def _check_for_update(self) -> None:
@@ -134,15 +135,15 @@ class FlaudeApp(App):
         self._config["theme"] = theme
         save_config(self._config)
 
-    def _refresh_sessions(self) -> None:
+    async def _refresh_sessions(self) -> None:
         """Fast path: state files → table + permission panel + title."""
-        sessions = self._mgr.load_all_sessions()
+        sessions = await asyncio.to_thread(self._mgr.load_all_sessions)
         active = {
             sid: s
             for sid, s in sessions.items()
             if s.status != SessionStatus.ENDED and (s.terminal is not None or s.is_tmux)
         }
-        correct_stale_waiting(self._mgr, active)
+        await asyncio.to_thread(correct_stale_waiting, self._mgr, active)
         self._active = active
 
         # Soft-hide: IDLE and NEW sessions past the threshold get hidden
@@ -194,7 +195,7 @@ class FlaudeApp(App):
 
         self._notifier.check(active, notif)
 
-    def _refresh_log(self) -> None:
+    async def _refresh_log(self) -> None:
         """Slow path: session detail + activity log."""
         active = self._active
         selected_id = self._selected_id
@@ -219,7 +220,8 @@ class FlaudeApp(App):
         else:
             log.set_session_id(None)
             log.set_transcript_path(None)
-        log.refresh_log()
+        await asyncio.to_thread(log.read_new_entries)
+        log.flush_pending()
 
     def _schedule_cleanup(self) -> None:
         self.run_worker(self._cleanup, thread=True)
@@ -242,7 +244,7 @@ class FlaudeApp(App):
             return
         if key and key != self._selected_id:
             self._selected_id = key
-            self._refresh_log()
+            asyncio.ensure_future(self._refresh_log())
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle Enter: navigate to session, or rename group if on a header."""
@@ -270,7 +272,7 @@ class FlaudeApp(App):
             else:
                 groups[repo_root] = name
             self._update_config_dict("group_names", groups)
-            self._refresh_sessions()
+            asyncio.ensure_future(self._refresh_sessions())
 
         self.push_screen(
             InputDialog("Group name:", current, autocomplete=False), on_result
@@ -289,7 +291,7 @@ class FlaudeApp(App):
             elif name != old_name:
                 sg = {sid: (name if g == old_name else g) for sid, g in sg.items()}
             self._update_config_dict("session_groups", sg)
-            self._refresh_sessions()
+            asyncio.ensure_future(self._refresh_sessions())
 
         self.push_screen(
             InputDialog("Group name:", old_name, autocomplete=False), on_result
@@ -316,7 +318,7 @@ class FlaudeApp(App):
             else:
                 groups.pop(session_id, None)
             self._update_config_dict("session_groups", groups)
-            self._refresh_sessions()
+            asyncio.ensure_future(self._refresh_sessions())
 
         self.push_screen(
             InputDialog("Group name:", current, autocomplete=False), on_result
@@ -528,7 +530,7 @@ class FlaudeApp(App):
 
     def action_toggle_hidden(self) -> None:
         self._show_hidden = not self._show_hidden
-        self._refresh_sessions()
+        asyncio.ensure_future(self._refresh_sessions())
         label = "Showing all sessions" if self._show_hidden else "Hiding stale sessions"
         self.notify(label)
 

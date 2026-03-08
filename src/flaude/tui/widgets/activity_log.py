@@ -28,6 +28,9 @@ class ActivityLog(RichLog):
         self._session_id: str | None = None
         self._cache_path: Path | None = None
         self._cache_last_size: int = 0
+        # Buffer for thread-safe I/O → main-thread widget writes
+        self._pending: list[str] = []
+        self._pending_clear: bool = False
 
     @property
     def mode(self) -> str:
@@ -87,27 +90,47 @@ class ActivityLog(RichLog):
         self.refresh_log()
 
     def refresh_log(self) -> None:
+        """Sync convenience: read + flush in one call (used by cycle_mode)."""
+        self.read_new_entries()
+        self.flush_pending()
+
+    def read_new_entries(self) -> None:
+        """Read new data from files into the pending buffer.
+
+        Thread-safe — does file I/O only, no widget mutations.
+        """
         if self._mode == "tools":
-            self._load_tools_log()
+            self._read_tools_log()
         else:
-            self._load_transcript()
+            self._read_transcript()
 
-    def _load_tools_log(self) -> None:
-        """Load from per-session activity cache (fast) or global log (fallback)."""
+    def flush_pending(self) -> None:
+        """Write buffered entries to the RichLog widget (must be called on main thread)."""
+        if self._pending_clear:
+            self.clear()
+            self._pending_clear = False
+        if not self._pending:
+            return
+        lines = self._pending
+        self._pending = []
+        for line in lines:
+            self.write(line)
+
+    # -- I/O methods (thread-safe, buffer to self._pending) --
+
+    def _read_tools_log(self) -> None:
         if self._cache_path and self._cache_path.exists():
-            self._load_from_cache()
+            self._read_from_cache()
         else:
-            self._load_from_global_log()
+            self._read_from_global_log()
 
-    def _load_from_global_log(self) -> None:
-        """Load new lines from the global hook activity log (fallback)."""
+    def _read_from_global_log(self) -> None:
         if not ACTIVITY_LOG.exists():
             return
         try:
             size = ACTIVITY_LOG.stat().st_size
             if size < self._tools_last_size:
-                # File was truncated (e.g., log rotation) — reset
-                self.clear()
+                self._pending_clear = True
                 self._tools_last_size = 0
             if size == self._tools_last_size:
                 return
@@ -118,16 +141,15 @@ class ActivityLog(RichLog):
             for line in new_content.strip().splitlines():
                 if self._session_filter and f"[{self._session_filter}]" not in line:
                     continue
-                self.write(f"[dim]│[/] {line}")
+                self._pending.append(f"[dim]│[/] {line}")
         except OSError:
             pass
 
-    def _load_from_cache(self) -> None:
-        """Load new entries from the per-session activity cache."""
+    def _read_from_cache(self) -> None:
         try:
             size = self._cache_path.stat().st_size
             if size < self._cache_last_size:
-                self.clear()
+                self._pending_clear = True
                 self._cache_last_size = 0
             if size == self._cache_last_size:
                 return
@@ -140,14 +162,13 @@ class ActivityLog(RichLog):
                     entry = json.loads(line)
                     formatted = _format_cache_entry(entry)
                     if formatted:
-                        self.write(formatted)
+                        self._pending.append(formatted)
                 except json.JSONDecodeError:
                     continue
         except OSError:
             pass
 
-    def _load_transcript(self) -> None:
-        """Load new entries from the session transcript JSONL."""
+    def _read_transcript(self) -> None:
         if not self._transcript_path:
             return
         path = Path(self._transcript_path)
@@ -156,8 +177,7 @@ class ActivityLog(RichLog):
         try:
             size = path.stat().st_size
             if size < self._transcript_last_size:
-                # File was truncated — reset
-                self.clear()
+                self._pending_clear = True
                 self._transcript_last_size = 0
             if size == self._transcript_last_size:
                 return
@@ -174,7 +194,7 @@ class ActivityLog(RichLog):
             for line in new_content.strip().splitlines():
                 formatted = self._format_transcript_entry(line)
                 if formatted:
-                    self.write(formatted)
+                    self._pending.append(formatted)
         except OSError:
             pass
 
