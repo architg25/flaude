@@ -17,6 +17,7 @@ from pathlib import Path
 
 from flaude.constants import (
     ACTIVITY_LOG,
+    LOGS_DIR,
     ensure_dirs,
     utcnow,
 )
@@ -46,6 +47,20 @@ def _log(session_id: str, event: str, detail: str = "") -> None:
             f.write(line)
     except Exception:
         pass  # logging must never break the hook
+
+
+def _log_activity(session_id: str, event: str, **fields: str) -> None:
+    """Append a pre-digested entry to the per-session activity cache.
+    Best-effort, never raises."""
+    try:
+        entry = {"ts": utcnow().strftime("%Y-%m-%dT%H:%M:%S"), "ev": event}
+        entry.update(fields)
+        line = json.dumps(entry, separators=(",", ":")) + "\n"
+        path = LOGS_DIR / f"{session_id}.activity.jsonl"
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +410,7 @@ def _handle_session_start(event: dict, sm: StateManager) -> None:
     state.tmux_pane = pane_id
     state.parent_terminal = parent_terminal
     sm.save_session(state)
+    _log_activity(session_id, "SessionStart")
     _log(session_id, "SessionStart")
 
 
@@ -423,6 +439,7 @@ def _handle_pre_tool_use(event: dict, sm: StateManager) -> None:
 
     sm.save_session(state)
 
+    _log_activity(state.session_id, "PreToolUse", tool=tool_name, sum=summary)
     _log(state.session_id, "PreToolUse", f'{tool_name} "{summary}"')
 
     # Only hard-deny dangerous commands. Everything else passes through
@@ -489,6 +506,7 @@ def _handle_post_tool_use(event: dict, sm: StateManager) -> None:
             state.loops = new_loops
 
     sm.save_session(state)
+    _log_activity(state.session_id, "PostToolUse", tool=tool_name)
     _log(state.session_id, "PostToolUse", tool_name)
 
 
@@ -515,6 +533,7 @@ def _handle_stop(event: dict, sm: StateManager) -> None:
         if branch:
             state.git_branch = branch
     sm.save_session(state)
+    _log_activity(state.session_id, "Stop")
     _log(state.session_id, "Stop", "idle")
 
 
@@ -528,6 +547,9 @@ def _handle_user_prompt_submit(event: dict, sm: StateManager) -> None:
     state.last_event = "UserPromptSubmit"
     state.last_event_at = utcnow()
     sm.save_session(state)
+    _log_activity(
+        state.session_id, "UserPrompt", text=trunc(prompt, 80) if prompt else ""
+    )
     _log(state.session_id, "UserPrompt", trunc(prompt, 80) if prompt else "")
 
 
@@ -537,6 +559,7 @@ def _handle_subagent_stop(event: dict, sm: StateManager) -> None:
     state.last_event = "SubagentStop"
     state.last_event_at = utcnow()
     sm.save_session(state)
+    _log_activity(state.session_id, "SubagentStop")
     _log(state.session_id, "SubagentStop")
 
 
@@ -548,6 +571,10 @@ def _handle_pre_compact(event: dict, sm: StateManager) -> None:
 def _handle_session_end(event: dict, sm: StateManager) -> None:
     session_id = event.get("session_id", "")
     sm.delete_session(session_id)
+    try:
+        (LOGS_DIR / f"{session_id}.activity.jsonl").unlink(missing_ok=True)
+    except OSError:
+        pass
     _log(session_id, "SessionEnd")
 
 
@@ -560,6 +587,7 @@ def _handle_permission_request(event: dict, sm: StateManager) -> None:
     state.last_event = "PermissionRequest"
     state.last_event_at = utcnow()
     sm.save_session(state)
+    _log_activity(state.session_id, "PermissionRequest", tool=tool_name)
     _log(state.session_id, "PermissionRequest", tool_name)
 
 

@@ -18,6 +18,7 @@ from flaude.hooks.dispatcher import (
     _handle_user_prompt_submit,
     _load_or_create,
     _log,
+    _log_activity,
 )
 from flaude.state.models import LoopInfo, SessionStatus
 
@@ -708,6 +709,96 @@ class TestCronListReconcile:
         )
         loaded = mgr.load_session("cron-list-keep")
         assert loaded.loops["keep1111"].created_at == "2026-03-08T10:00:00"
+
+
+# ---------------------------------------------------------------------------
+# _log_activity
+# ---------------------------------------------------------------------------
+
+
+class TestLogActivity:
+    def test_writes_pre_tool_use_entry(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("flaude.hooks.dispatcher.LOGS_DIR", tmp_path)
+        _log_activity("sess-001", "PreToolUse", tool="Read", sum="foo.py")
+        path = tmp_path / "sess-001.activity.jsonl"
+        assert path.exists()
+        entry = json.loads(path.read_text().strip())
+        assert entry["ev"] == "PreToolUse"
+        assert entry["tool"] == "Read"
+        assert entry["sum"] == "foo.py"
+        assert "ts" in entry
+
+    def test_writes_user_prompt_entry(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("flaude.hooks.dispatcher.LOGS_DIR", tmp_path)
+        _log_activity("sess-001", "UserPrompt", text="Fix the bug")
+        path = tmp_path / "sess-001.activity.jsonl"
+        entry = json.loads(path.read_text().strip())
+        assert entry["ev"] == "UserPrompt"
+        assert entry["text"] == "Fix the bug"
+
+    def test_writes_stop_entry(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("flaude.hooks.dispatcher.LOGS_DIR", tmp_path)
+        _log_activity("sess-001", "Stop")
+        path = tmp_path / "sess-001.activity.jsonl"
+        entry = json.loads(path.read_text().strip())
+        assert entry["ev"] == "Stop"
+        assert "tool" not in entry
+
+    def test_appends_multiple_entries(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("flaude.hooks.dispatcher.LOGS_DIR", tmp_path)
+        _log_activity("sess-001", "PreToolUse", tool="Read", sum="a.py")
+        _log_activity("sess-001", "PreToolUse", tool="Edit", sum="b.py")
+        path = tmp_path / "sess-001.activity.jsonl"
+        lines = path.read_text().strip().splitlines()
+        assert len(lines) == 2
+
+    def test_never_raises_on_bad_path(self, monkeypatch):
+        from pathlib import Path
+
+        monkeypatch.setattr(
+            "flaude.hooks.dispatcher.LOGS_DIR", Path("/nonexistent/path")
+        )
+        _log_activity("sess-001", "Stop")  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Handlers write activity cache
+# ---------------------------------------------------------------------------
+
+
+class TestHandlersWriteActivityCache:
+    def test_pre_tool_use_writes_cache(self, mgr, tmp_path, monkeypatch, no_rules):
+        monkeypatch.setattr("flaude.hooks.dispatcher.LOGS_DIR", tmp_path)
+        monkeypatch.setattr(
+            "flaude.hooks.dispatcher.ACTIVITY_LOG", tmp_path / "activity.log"
+        )
+        _handle_pre_tool_use(
+            {
+                "session_id": "cache-test",
+                "cwd": "/tmp",
+                "tool_name": "Read",
+                "tool_input": {"file_path": "/tmp/foo.py"},
+            },
+            mgr,
+        )
+        cache = tmp_path / "cache-test.activity.jsonl"
+        assert cache.exists()
+        entry = json.loads(cache.read_text().strip())
+        assert entry["ev"] == "PreToolUse"
+        assert entry["tool"] == "Read"
+
+    def test_session_end_deletes_cache(self, mgr, tmp_path, monkeypatch):
+        monkeypatch.setattr("flaude.hooks.dispatcher.LOGS_DIR", tmp_path)
+        monkeypatch.setattr(
+            "flaude.hooks.dispatcher.ACTIVITY_LOG", tmp_path / "activity.log"
+        )
+        # Create a cache file first
+        cache = tmp_path / "end-test.activity.jsonl"
+        cache.write_text('{"ev":"Stop"}\n')
+        state = make_state("end-test")
+        mgr.save_session(state)
+        _handle_session_end({"session_id": "end-test"}, mgr)
+        assert not cache.exists()
 
 
 class TestLoopLifecycle:
