@@ -171,11 +171,9 @@ class FlaudeApp(App):
                     visible[sid] = s
 
         table = self.query_one(SessionTable)
-        any_named = any(s.custom_title for s in active.values())
         table.update_sessions(
             visible,
             hidden_count=hidden_count,
-            any_named=any_named,
             group_names=self._config.get("group_names"),
             auto_group=self._config.get("auto_group", True),
             session_groups=self._config.get("session_groups"),

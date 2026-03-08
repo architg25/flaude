@@ -41,19 +41,18 @@ def _format_project(state: SessionState, max_len: int = 25) -> str:
     return Path(state.cwd).name if state.cwd else "?"
 
 
-def _format_name(state: SessionState) -> Text:
-    """Return the display name for the Name column.
+def _format_session_identity(state: SessionState) -> str:
+    """Format the Session column: custom_title (agent_name) > agent_name > session_id[:8].
 
-    Custom titles (set via /rename) are shown as-is.
-    Sessions without a custom title show "[default]" (dim).
-    Text objects are used to prevent Rich markup interpretation.
+    When a custom title exists, show it with the underlying identifier in parens.
     """
+    base = state.agent_name if state.agent_name else state.session_id[:8]
     if state.custom_title:
         title = state.custom_title
         if len(title) > 20:
             title = title[:19] + "…"
-        return Text(title)
-    return Text("[default]", style="dim")
+        return f"{title} ({base})"
+    return base
 
 
 def _build_row_data(
@@ -61,12 +60,8 @@ def _build_row_data(
     now: datetime,
     css: dict,
     tree_prefix: str = "",
-    include_name: bool = False,
 ) -> tuple:
-    """Build the cell values for a session row.
-
-    Returns 8 cells when include_name is True, 7 otherwise.
-    """
+    """Build the 5 cell values for a session row."""
     info = STATUS_INFO[state.status]
     color = css.get(info.theme_var, "")
     style = f"{color} bold" if info.bold else color
@@ -77,20 +72,24 @@ def _build_row_data(
     status_text = Text(
         f"{tree_prefix}{info.indicator} {info.label} {duration}", style=style
     )
+    session = _format_session_identity(state)
     project = _format_project(state)
-    uptime = format_uptime(now, state.started_at)
+
+    # Environment: terminal · mode
     if state.is_tmux:
         parent = state.parent_terminal or "?"
         term = f"{parent} (tmux)"
     else:
         term = state.terminal or "?"
     mode = state.permission_mode or "default"
+    environment = f"{term} · {mode}"
+
+    # Usage: context tokens (colored) · uptime (dim)
     context = _format_context(state.context_tokens, state.model, css)
-    label = state.agent_name if state.agent_name else state.session_id[:8]
-    if include_name:
-        name = _format_name(state)
-        return status_text, name, label, project, term, mode, context, uptime
-    return status_text, label, project, term, mode, context, uptime
+    uptime = format_uptime(now, state.started_at)
+    usage = Text.assemble(context, Text(f" · {uptime}", style="dim"))
+
+    return status_text, session, project, environment, usage
 
 
 def _session_group_key(
@@ -236,39 +235,16 @@ class SessionTable(DataTable):
 
     def on_mount(self) -> None:
         self.cursor_type = "row"
-        self._has_name_col = False
         self._col_keys = self.add_columns(
-            "Status", "Session", "Project", "Terminal", "Mode", "Context", "Uptime"
+            "Status", "Session", "Project", "Environment", "Usage"
         )
         self._last_order: list[str] = []
         self.border_title = "Sessions"
-
-    def _rebuild_columns(self, include_name: bool) -> None:
-        """Clear and re-add columns when Name column visibility changes."""
-        self.clear(columns=True)
-        self._last_order = []
-        self._has_name_col = include_name
-        if include_name:
-            self._col_keys = self.add_columns(
-                "Status",
-                "Name",
-                "Session",
-                "Project",
-                "Terminal",
-                "Mode",
-                "Context",
-                "Uptime",
-            )
-        else:
-            self._col_keys = self.add_columns(
-                "Status", "Session", "Project", "Terminal", "Mode", "Context", "Uptime"
-            )
 
     def update_sessions(
         self,
         sessions: dict[str, SessionState],
         hidden_count: int = 0,
-        any_named: bool = False,
         group_names: dict[str, str] | None = None,
         auto_group: bool = True,
         session_groups: dict[str, str] | None = None,
@@ -290,14 +266,8 @@ class SessionTable(DataTable):
                     ),
                     "",
                     "",
-                    "",
-                    "",
                 )
             return
-
-        should_have_name = any_named or any(s.custom_title for s in sessions.values())
-        if should_have_name != self._has_name_col:
-            self._rebuild_columns(should_have_name)
 
         sorted_sessions = _sort_sessions(sessions, auto_group, session_groups)
         prefixes = _compute_tree_prefixes(sorted_sessions)
@@ -335,7 +305,6 @@ class SessionTable(DataTable):
                     now,
                     css,
                     prefixes.get(state.session_id, ""),
-                    include_name=self._has_name_col,
                 )
                 for col_key, value in zip(self._col_keys, cells):
                     self.update_cell(state.session_id, col_key, value)
@@ -363,7 +332,6 @@ class SessionTable(DataTable):
                     now,
                     css,
                     prefixes.get(state.session_id, ""),
-                    include_name=self._has_name_col,
                 )
                 self.add_row(*cells, key=state.session_id)
             self._last_order = new_order
