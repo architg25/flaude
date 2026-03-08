@@ -115,7 +115,7 @@ class SessionDetail(Static):
             lines.append(_kv("Term", f"{parent} [dim]· tmux[/]"))
         else:
             lines.append(_kv("Term", state.terminal or "?"))
-        lines.append(_kv("ID", f"[dim]{state.session_id[:12]}[/]"))
+        lines.append(_kv("ID", f"[dim]{state.session_id}[/]"))
         if state.custom_title:
             lines.append(_kv("Name", state.custom_title))
         manual_group = (session_groups or {}).get(state.session_id)
