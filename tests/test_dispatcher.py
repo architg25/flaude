@@ -708,3 +708,78 @@ class TestCronListReconcile:
         )
         loaded = mgr.load_session("cron-list-keep")
         assert loaded.loops["keep1111"].created_at == "2026-03-08T10:00:00"
+
+
+class TestLoopLifecycle:
+    """End-to-end: create session → create loop → list → delete → verify."""
+
+    def test_full_lifecycle(self, mgr, no_rules):
+        _handle_session_start({"session_id": "loop-e2e", "cwd": "/tmp/test"}, mgr)
+
+        # Create a loop
+        _handle_post_tool_use(
+            {
+                "session_id": "loop-e2e",
+                "hook_event_name": "PostToolUse",
+                "tool_name": "CronCreate",
+                "tool_input": {
+                    "cron": "*/5 * * * *",
+                    "prompt": "check deploy",
+                    "recurring": True,
+                },
+                "tool_response": {
+                    "id": "aaaa1111",
+                    "humanSchedule": "Every 5 minutes",
+                    "recurring": True,
+                    "durable": False,
+                },
+            },
+            mgr,
+        )
+
+        state = mgr.load_session("loop-e2e")
+        assert "aaaa1111" in state.loops
+        assert state.loops["aaaa1111"].prompt == "check deploy"
+
+        # CronList confirms the loop
+        _handle_post_tool_use(
+            {
+                "session_id": "loop-e2e",
+                "hook_event_name": "PostToolUse",
+                "tool_name": "CronList",
+                "tool_response": {
+                    "jobs": [
+                        {
+                            "id": "aaaa1111",
+                            "cron": "*/5 * * * *",
+                            "humanSchedule": "Every 5 minutes",
+                            "prompt": "check deploy",
+                            "recurring": True,
+                            "durable": False,
+                        }
+                    ]
+                },
+            },
+            mgr,
+        )
+
+        state = mgr.load_session("loop-e2e")
+        assert len(state.loops) == 1
+
+        # Delete the loop
+        _handle_post_tool_use(
+            {
+                "session_id": "loop-e2e",
+                "hook_event_name": "PostToolUse",
+                "tool_name": "CronDelete",
+                "tool_response": {"id": "aaaa1111"},
+            },
+            mgr,
+        )
+
+        state = mgr.load_session("loop-e2e")
+        assert len(state.loops) == 0
+
+        # Session end cleans up
+        _handle_session_end({"session_id": "loop-e2e"}, mgr)
+        assert mgr.load_session("loop-e2e") is None
