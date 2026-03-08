@@ -123,10 +123,12 @@ def _build_row_data(
     else:
         duration = format_compact_duration(now, state.last_event_at)
     status_text = Text(
-        f"{tree_prefix}{info.indicator} {info.label} {duration}", style=style
+        f"{tree_prefix}{info.indicator} {info.label} {duration}",
+        style=style,
+        justify="center",
     )
-    session = _format_session_identity(state)
-    project = _format_project(state)
+    session = Text(_format_session_identity(state), justify="center")
+    project = Text(_format_project(state), justify="center")
 
     # Environment: abbreviated terminal + mode (only if non-default)
     if state.is_tmux:
@@ -135,12 +137,13 @@ def _build_row_data(
     else:
         term = _abbrev_terminal(state.terminal or "?")
     mode = _abbrev_mode(state.permission_mode or "default")
-    environment = f"{term:<3} | {mode}"
+    environment = Text(f"{term:<3} | {mode}", justify="center")
 
     # Usage: context tokens (colored) · uptime (dim)
     context = _format_context(state.context_tokens, state.model, css)
     uptime = format_uptime(now, state.started_at)
     usage = Text.assemble(context, Text(f" | {uptime}", style="dim"))
+    usage.justify = "center"
 
     return status_text, session, project, environment, usage
 
@@ -289,7 +292,11 @@ class SessionTable(DataTable):
     def on_mount(self) -> None:
         self.cursor_type = "row"
         self._col_keys = self.add_columns(
-            "Status", "Session", "Project", "Env", "Usage"
+            Text("Status", justify="center"),
+            Text("Session", justify="center"),
+            Text("Project", justify="center"),
+            Text("Env", justify="center"),
+            Text("Usage", justify="center"),
         )
         self._last_order: list[str] = []
         self.border_title = "Sessions"
