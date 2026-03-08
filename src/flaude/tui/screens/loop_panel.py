@@ -144,18 +144,6 @@ class LoopPanel(ModalScreen[str | None]):
         if old_cursor_row > 0 and old_cursor_row < table.row_count:
             table.move_cursor(row=old_cursor_row)
 
-        sessions_without = len(sessions) - len(sessions_with_loops)
-        if sessions_without:
-            noun = "session" if sessions_without == 1 else "sessions"
-            table.add_row(
-                f"No loops: {sessions_without} other {noun}",
-                "",
-                "",
-                "",
-                "",
-                key="__footer__",
-            )
-
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         key = str(event.row_key.value) if event.row_key else ""
         prompt = getattr(self, "_row_prompt_map", {}).get(key, "")
