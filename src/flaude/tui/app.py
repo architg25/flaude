@@ -578,4 +578,9 @@ class FlaudeApp(App):
         self.push_screen(HelpDialog())
 
     def action_show_loops(self) -> None:
-        self.push_screen(LoopPanel(self._active))
+        def on_result(session_id: str | None) -> None:
+            if session_id:
+                self._selected_id = session_id
+                self.action_goto_session()
+
+        self.push_screen(LoopPanel(lambda: self._active), on_result)

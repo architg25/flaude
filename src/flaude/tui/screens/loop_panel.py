@@ -6,16 +6,24 @@ from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical, VerticalScroll
+from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Static
+from textual.widgets import DataTable, Static
 
+from flaude.constants import TUI_REFRESH_INTERVAL
 from flaude.state.models import SessionState
 from flaude.tools import trunc
 
+# Row keys use this prefix for session group headers
+_SESSION_PREFIX = "__loop_session__"
 
-class LoopPanel(ModalScreen[None]):
-    """Modal panel showing loops grouped by session."""
+
+class LoopPanel(ModalScreen[str | None]):
+    """Modal panel showing loops grouped by session.
+
+    Dismisses with a session_id when Enter is pressed on a loop row,
+    or None when closed via Escape/L.
+    """
 
     BINDINGS = [
         Binding("escape", "dismiss_panel", "Close"),
@@ -27,7 +35,7 @@ class LoopPanel(ModalScreen[None]):
         align: center middle;
     }
     #loop-dialog {
-        width: 72;
+        width: 80;
         height: auto;
         max-height: 80%;
         padding: 1 2;
@@ -39,23 +47,20 @@ class LoopPanel(ModalScreen[None]):
         text-style: bold;
         margin-bottom: 1;
     }
-    #loop-content {
+    #loop-table {
         height: auto;
-        max-height: 60;
-    }
-    .loop-session-header {
-        text-style: bold;
-        color: $primary;
-        margin-top: 1;
-    }
-    .loop-row {
-        height: 1;
-        padding-left: 2;
+        max-height: 50;
     }
     .loop-empty {
         color: $text-muted;
         text-align: center;
         margin-top: 1;
+    }
+    #loop-prompt {
+        margin-top: 1;
+        padding: 0 1;
+        height: auto;
+        max-height: 4;
     }
     #loop-hint {
         color: $text-muted;
@@ -64,49 +69,107 @@ class LoopPanel(ModalScreen[None]):
     }
     """
 
-    def __init__(self, sessions: dict[str, SessionState]) -> None:
+    def __init__(self, get_sessions: callable) -> None:
         super().__init__()
-        self._sessions = sessions
+        self._get_sessions = get_sessions
 
     def compose(self) -> ComposeResult:
         with Vertical(id="loop-dialog"):
             yield Static("Loops", id="loop-title")
-            with VerticalScroll(id="loop-content"):
-                yield from self._build_content()
+            table = DataTable(id="loop-table", cursor_type="row")
+            table.add_columns("Session", "ID", "Schedule", "Type", "Prompt")
+            yield table
+            yield Static("", id="loop-prompt")
             yield Static(
-                "[bold]L[/] or [bold]Esc[/] to close",
+                "[bold]Enter[/] Go to session  [bold]L[/]/[bold]Esc[/] Close",
                 id="loop-hint",
             )
 
-    def _build_content(self) -> ComposeResult:
-        sessions_with_loops = {sid: s for sid, s in self._sessions.items() if s.loops}
-        sessions_without = len(self._sessions) - len(sessions_with_loops)
+    def on_mount(self) -> None:
+        self._refresh()
+        self.set_interval(TUI_REFRESH_INTERVAL * 2, self._refresh)
 
-        if not sessions_with_loops:
-            yield Static("No active loops", classes="loop-empty")
-            return
+    def _refresh(self) -> None:
+        table = self.query_one(DataTable)
+        sessions = self._get_sessions()
+
+        # Build flat list of rows: (session_id, row_key, cells, full_prompt)
+        rows: list[tuple[str, str, tuple, str]] = []
+        sessions_with_loops = {sid: s for sid, s in sessions.items() if s.loops}
 
         for sid, session in sessions_with_loops.items():
             project = _project_name(session)
-            yield Static(
-                f"[bold]{project}[/] ({sid[:8]})",
-                classes="loop-session-header",
-            )
-            for loop in session.loops.values():
-                marker = "\u21bb" if loop.recurring else "\u2460"
+            for i, loop in enumerate(session.loops.values()):
+                marker = "↻" if loop.recurring else "①"
                 cron = loop.cron_expr or loop.human_schedule
-                prompt = trunc(loop.prompt, 40)
-                yield Static(
-                    f"  {loop.task_id}  {cron:<14} {marker} {prompt}",
-                    classes="loop-row",
+                # Show session name only on first row of each group
+                session_col = f"{project} ({sid[:8]})" if i == 0 else ""
+                row_key = f"{sid}:{loop.task_id}"
+                rows.append(
+                    (
+                        sid,
+                        row_key,
+                        (
+                            session_col,
+                            loop.task_id,
+                            cron,
+                            marker,
+                            trunc(loop.prompt, 40),
+                        ),
+                        loop.prompt,
+                    )
                 )
 
+        # Preserve cursor position across refreshes
+        old_cursor_row = table.cursor_row
+
+        table.clear()
+
+        if not rows:
+            total = len(sessions)
+            if total:
+                table.add_row(f"No active loops ({total} sessions)", "", "", "", "")
+            else:
+                table.add_row("No active loops", "", "", "", "")
+            return
+
+        self._row_session_map: dict[str, str] = {}
+        self._row_prompt_map: dict[str, str] = {}
+        for sid, row_key, cells, full_prompt in rows:
+            table.add_row(*cells, key=row_key)
+            self._row_session_map[row_key] = sid
+            self._row_prompt_map[row_key] = full_prompt
+
+        # Restore cursor position
+        if old_cursor_row > 0 and old_cursor_row < table.row_count:
+            table.move_cursor(row=old_cursor_row)
+
+        sessions_without = len(sessions) - len(sessions_with_loops)
         if sessions_without:
             noun = "session" if sessions_without == 1 else "sessions"
-            yield Static(
-                f"[dim]No loops: {sessions_without} other {noun}[/]",
-                classes="loop-empty",
+            table.add_row(
+                f"No loops: {sessions_without} other {noun}",
+                "",
+                "",
+                "",
+                "",
+                key="__footer__",
             )
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        key = str(event.row_key.value) if event.row_key else ""
+        prompt = getattr(self, "_row_prompt_map", {}).get(key, "")
+        label = self.query_one("#loop-prompt", Static)
+        if prompt:
+            label.update(f"[dim]Prompt:[/] [italic]{prompt}[/]")
+        else:
+            label.update("")
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        key = str(event.row_key.value) if event.row_key else ""
+        session_id = getattr(self, "_row_session_map", {}).get(key)
+        if session_id:
+            self.dismiss(session_id)
 
     def action_dismiss_panel(self) -> None:
         self.dismiss(None)
