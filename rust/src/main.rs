@@ -292,6 +292,27 @@ fn log_activity(session_id: &str, event: &str, detail: &str) {
     }
 }
 
+fn log_session_activity(session_id: &str, event: &str, fields: &[(&str, &str)]) {
+    let ts = utcnow().format("%Y-%m-%dT%H:%M:%S");
+    let mut entry = serde_json::json!({
+        "ts": ts.to_string(),
+        "ev": event,
+    });
+    if let Some(obj) = entry.as_object_mut() {
+        for (k, v) in fields {
+            if !v.is_empty() {
+                obj.insert(k.to_string(), serde_json::Value::String(v.to_string()));
+            }
+        }
+    }
+    let path = state_dir().join("logs").join(format!("{session_id}.activity.jsonl"));
+    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&path) {
+        let mut line = serde_json::to_string(&entry).unwrap_or_default();
+        line.push('\n');
+        let _ = f.write_all(line.as_bytes());
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tool summarization — mirrors dispatcher._SUMMARIZERS
 // ---------------------------------------------------------------------------
@@ -909,6 +930,7 @@ fn handle_session_start(event: &serde_json::Value) {
     state.tmux_pane = tmux_pane;
     state.parent_terminal = parent_terminal;
     save_session(&state);
+    log_session_activity(&session_id, "SessionStart", &[]);
     log_activity(&session_id, "SessionStart", "");
 }
 
@@ -944,6 +966,7 @@ fn handle_pre_tool_use(event: &serde_json::Value) {
     }
 
     save_session(&state);
+    log_session_activity(&state.session_id, "PreToolUse", &[("tool", &tool_name), ("sum", &summary)]);
     log_activity(
         &state.session_id,
         "PreToolUse",
@@ -1030,6 +1053,7 @@ fn handle_post_tool_use(event: &serde_json::Value) {
     }
 
     save_session(&state);
+    log_session_activity(&state.session_id, "PostToolUse", &[("tool", &tool_name)]);
     log_activity(&state.session_id, "PostToolUse", &tool_name);
 }
 
@@ -1066,6 +1090,7 @@ fn handle_stop(event: &serde_json::Value) {
     }
 
     save_session(&state);
+    log_session_activity(&state.session_id, "Stop", &[]);
     log_activity(&state.session_id, "Stop", "idle");
 }
 
@@ -1088,10 +1113,12 @@ fn handle_user_prompt_submit(event: &serde_json::Value) {
     state.last_event_at = utcnow();
 
     save_session(&state);
+    let prompt_detail = trunc(&prompt, 80);
+    log_session_activity(&state.session_id, "UserPrompt", &[("text", &prompt_detail)]);
     let detail = if prompt.is_empty() {
         String::new()
     } else {
-        trunc(&prompt, 80)
+        prompt_detail
     };
     log_activity(&state.session_id, "UserPrompt", &detail);
 }
@@ -1102,6 +1129,7 @@ fn handle_subagent_stop(event: &serde_json::Value) {
     state.last_event = "SubagentStop".into();
     state.last_event_at = utcnow();
     save_session(&state);
+    log_session_activity(&state.session_id, "SubagentStop", &[]);
     log_activity(&state.session_id, "SubagentStop", "");
 }
 
@@ -1113,6 +1141,9 @@ fn handle_pre_compact(event: &serde_json::Value) {
 fn handle_session_end(event: &serde_json::Value) {
     let session_id = get_str(event, "session_id");
     delete_session(&session_id);
+    // Delete per-session activity cache
+    let cache_path = state_dir().join("logs").join(format!("{session_id}.activity.jsonl"));
+    let _ = fs::remove_file(&cache_path);
     log_activity(&session_id, "SessionEnd", "");
 }
 
@@ -1129,6 +1160,7 @@ fn handle_permission_request(event: &serde_json::Value) {
     state.last_event = "PermissionRequest".into();
     state.last_event_at = utcnow();
     save_session(&state);
+    log_session_activity(&state.session_id, "PermissionRequest", &[("tool", &tool_name)]);
     log_activity(&state.session_id, "PermissionRequest", &tool_name);
 }
 
