@@ -4,7 +4,13 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+from rich.console import Console, ConsoleOptions, RenderResult
+from rich.measure import Measurement
+from rich.segment import Segment
+from rich.style import Style
 from rich.text import Text
+from textual._types import SegmentLines
+from textual.coordinate import Coordinate
 from textual.widgets import DataTable
 
 from flaude.constants import utcnow, get_model_limit
@@ -16,8 +22,32 @@ REPO_HEADER_PREFIX = "__repo__"
 GROUP_HEADER_PREFIX = "__group__"
 
 
-def _header_text(display: str) -> Text:
-    return Text(f"▍{display}", style="bold")
+class _ZeroWidthText:
+    """Renderable that displays text but reports zero width for measurement.
+
+    Prevents group header names from inflating DataTable column widths.
+    """
+
+    def __init__(self, text: Text) -> None:
+        self.text = text
+
+    def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        yield self.text
+
+    def __rich_measure__(
+        self, console: Console, options: ConsoleOptions
+    ) -> Measurement:
+        return Measurement(0, 0)
+
+
+_STYLE_DIM = Style(dim=True)
+_STYLE_BOLD = Style(bold=True)
+
+
+def _header_text(display: str) -> _ZeroWidthText:
+    return _ZeroWidthText(Text(f" {display}", style="bold"))
 
 
 def _format_project(state: SessionState, max_len: int = 25) -> str:
@@ -241,6 +271,110 @@ class SessionTable(DataTable):
         self._last_order: list[str] = []
         self.border_title = "Sessions"
 
+    def _render_line_in_row(
+        self,
+        row_key,
+        line_no: int,
+        base_style: Style,
+        cursor_location: Coordinate,
+        hover_location: Coordinate,
+    ) -> tuple[SegmentLines, SegmentLines]:
+        """Render group header rows as full-width dividers.
+
+        WARNING: This reimplements DataTable._render_line_in_row internals
+        (cache keys, style resolution, row extension). Must be audited on
+        Textual upgrades.  See update_sessions() for the height=1/2 convention
+        that controls whether a spacer line appears above the divider.
+        """
+        key_val = row_key.value
+        if key_val is None or not self._is_header_key(key_val):
+            return super()._render_line_in_row(
+                row_key, line_no, base_style, cursor_location, hover_location
+            )
+
+        cache_key = (
+            row_key,
+            line_no,
+            base_style,
+            cursor_location,
+            hover_location,
+            self.cursor_type,
+            self.show_cursor,
+            self._show_hover_cursor,
+            self._update_count,
+            self._pseudo_class_state,
+        )
+        if cache_key in self._row_render_cache:
+            return self._row_render_cache[cache_key]
+
+        row_index = self._row_locations.get(row_key)
+        should_highlight = self._should_highlight
+
+        # Total scrollable width across all columns
+        total_width = sum(col.get_render_width(self) for col in self.ordered_columns)
+
+        # Cursor/hover styling
+        row_style = self._get_row_style(row_index, base_style)
+        is_cursor = should_highlight(
+            cursor_location, Coordinate(row_index, 0), self.cursor_type
+        )
+        is_hover = should_highlight(
+            hover_location, Coordinate(row_index, 0), self.cursor_type
+        )
+        component_style, post_style = self._get_styles_to_render_cell(
+            False,
+            False,
+            False,
+            is_hover,
+            is_cursor,
+            self.show_cursor,
+            self._show_hover_cursor,
+            self.cursor_foreground_priority == "css",
+            self.cursor_background_priority == "css",
+        )
+        combined_style = row_style + component_style + post_style
+
+        # Row is 2 lines tall for non-first groups: line 0 = blank spacer,
+        # line 1 = divider.  First group has height=1, so line_no is always 0.
+        is_divider_line = (self.rows[row_key].height == 1) or (line_no == 1)
+
+        if is_divider_line:
+            # " ── name ──────…" divider spanning all columns
+            name = self._data[row_key][self._col_keys[0]].text.plain.strip()
+            rule_style = _STYLE_DIM + combined_style
+            label_style = _STYLE_BOLD + combined_style
+            pad = self.cell_padding
+            prefix = f"{' ' * pad}── "
+            suffix = " "
+            fill_len = max(0, total_width - len(prefix) - len(name) - len(suffix))
+            segments = [
+                Segment(prefix, rule_style),
+                Segment(name, label_style),
+                Segment(suffix + "─" * fill_len, rule_style),
+            ]
+            line = Segment.adjust_line_length(
+                segments, total_width, style=combined_style
+            )
+        else:
+            # Blank spacer line (line 0 of height-2 header rows)
+            line = [Segment(" " * total_width, combined_style)]
+
+        scrollable_row: list[list[Segment]] = [line]
+
+        # Fill remaining space to the right of the table
+        widget_width = self.size.width
+        remaining = max(0, widget_width - total_width - self._row_label_column_width)
+        if remaining:
+            extend_style = combined_style + Style.from_meta(
+                {"row": row_index, "column": 0, "out_of_bounds": True}
+            )
+            scrollable_row.append([Segment(" " * remaining, extend_style)])
+
+        fixed_row: list[list[Segment]] = []
+        row_pair = (fixed_row, scrollable_row)
+        self._row_render_cache[cache_key] = row_pair
+        return row_pair
+
     def update_sessions(
         self,
         sessions: dict[str, SessionState],
@@ -317,14 +451,19 @@ class SessionTable(DataTable):
             # Slow path: sessions added/removed/reordered — full rebuild
             self.clear()
             last_group = None
+            row_idx = 0
             for state in sorted_sessions:
                 group = session_group_map[state.session_id]
                 if group and group != last_group:
                     display = display_names.get(group, "?")
                     header_text = _header_text(display)
                     empty_cells = [""] * (num_cols - 1)
-                    self.add_row(header_text, *empty_cells, key=group)
+                    # height=2 adds a blank spacer line above the divider;
+                    # height=1 for the first row.  See _render_line_in_row.
+                    h = 1 if row_idx == 0 else 2
+                    self.add_row(header_text, *empty_cells, height=h, key=group)
                     last_group = group
+                    row_idx += 1
                 elif not group and last_group is not None:
                     last_group = None
                 cells = _build_row_data(
@@ -334,6 +473,7 @@ class SessionTable(DataTable):
                     prefixes.get(state.session_id, ""),
                 )
                 self.add_row(*cells, key=state.session_id)
+                row_idx += 1
             self._last_order = new_order
 
             # Restore cursor to previously selected row
