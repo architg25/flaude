@@ -41,6 +41,7 @@ from flaude.tui.screens.input_dialog import InputDialog
 from flaude.tui.screens.prompt_dialog import PromptDialog
 from flaude.tui.screens.help_dialog import HelpDialog
 from flaude.tui.screens.settings_panel import SettingsPanel
+from flaude.tui.screens.loop_panel import LoopPanel
 from flaude.tui.widgets.session_table import (
     SessionTable,
     REPO_HEADER_PREFIX,
@@ -72,6 +73,7 @@ class FlaudeApp(App):
         Binding("h", "toggle_hidden", "Show Hidden"),
         Binding("t", "change_theme", "Theme"),
         Binding("question_mark", "help", "Help"),
+        Binding("L", "show_loops", "Loops", show=False),
     ]
 
     def __init__(self) -> None:
@@ -574,3 +576,6 @@ class FlaudeApp(App):
 
     def action_help(self) -> None:
         self.push_screen(HelpDialog())
+
+    def action_show_loops(self) -> None:
+        self.push_screen(LoopPanel(self._active))
