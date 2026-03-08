@@ -101,6 +101,7 @@ _MODE_ABBREV = {
 
 _TABLE_LABEL_ABBREV = {
     "PERMISSION": "PERM",
+    "RUNNING": "RUN",
 }
 
 
