@@ -337,11 +337,15 @@ def cmd_uninstall(args: argparse.Namespace) -> None:
                 print(f"  unset {v}")
             print("Add the above to your shell profile to fully clean up.")
 
-    # pip uninstall
+    # uninstall the package itself
     import subprocess
 
     print()
-    subprocess.run([sys.executable, "-m", "pip", "uninstall", "flaude"])
+    uv = shutil.which("uv")
+    if uv and "uv/tools/" in sys.executable:
+        subprocess.run([uv, "tool", "uninstall", "flaude"])
+    else:
+        subprocess.run([sys.executable, "-m", "pip", "uninstall", "flaude"])
 
 
 def cmd_run(args: argparse.Namespace) -> None:
