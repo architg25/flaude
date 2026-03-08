@@ -50,7 +50,7 @@ def _header_text(display: str) -> _ZeroWidthText:
     return _ZeroWidthText(Text(f" {display}", style="bold"))
 
 
-def _format_project(state: SessionState, max_len: int = 25) -> str:
+def _format_project(state: SessionState, max_len: int = 22) -> str:
     """Format the Project column value.
 
     Shows 'repo-name (branch)' for git repos, truncating the repo name
@@ -85,6 +85,29 @@ def _format_session_identity(state: SessionState) -> str:
     return base
 
 
+_TERMINAL_ABBREV = {
+    "iTerm2": "iT2",
+    "Ghostty": "Gh",
+    "Terminal": "Trm",
+    "Warp": "Wrp",
+    "IntelliJ": "IJ",
+}
+
+_MODE_ABBREV = {
+    "default": "─",
+    "plan": "plan",
+    "acceptEdits": "edit",
+}
+
+
+def _abbrev_terminal(name: str) -> str:
+    return _TERMINAL_ABBREV.get(name, name)
+
+
+def _abbrev_mode(mode: str) -> str:
+    return _MODE_ABBREV.get(mode, mode)
+
+
 def _build_row_data(
     state: SessionState,
     now: datetime,
@@ -105,19 +128,19 @@ def _build_row_data(
     session = _format_session_identity(state)
     project = _format_project(state)
 
-    # Environment: terminal · mode
+    # Environment: abbreviated terminal + mode (only if non-default)
     if state.is_tmux:
         parent = state.parent_terminal or "?"
-        term = f"{parent} (tmux)"
+        term = f"{_abbrev_terminal(parent)}|tmux"
     else:
-        term = state.terminal or "?"
-    mode = state.permission_mode or "default"
-    environment = f"{term} · {mode}"
+        term = _abbrev_terminal(state.terminal or "?")
+    mode = _abbrev_mode(state.permission_mode or "default")
+    environment = f"{term:<3} | {mode}"
 
     # Usage: context tokens (colored) · uptime (dim)
     context = _format_context(state.context_tokens, state.model, css)
     uptime = format_uptime(now, state.started_at)
-    usage = Text.assemble(context, Text(f" · {uptime}", style="dim"))
+    usage = Text.assemble(context, Text(f" | {uptime}", style="dim"))
 
     return status_text, session, project, environment, usage
 
@@ -266,7 +289,7 @@ class SessionTable(DataTable):
     def on_mount(self) -> None:
         self.cursor_type = "row"
         self._col_keys = self.add_columns(
-            "Status", "Session", "Project", "Environment", "Usage"
+            "Status", "Session", "Project", "Env", "Usage"
         )
         self._last_order: list[str] = []
         self.border_title = "Sessions"
@@ -520,7 +543,7 @@ class SessionTable(DataTable):
 
 def _format_context(tokens: int, model: str | None, css: dict) -> Text:
     if tokens <= 0:
-        return Text("─", style=css.get("text-muted", "dim"))
+        return Text(f"{'─':>4}", style=css.get("text-muted", "dim"))
     label = format_token_count(tokens)
     limit = get_model_limit(model)
     ratio = tokens / limit if limit else 0
@@ -530,4 +553,4 @@ def _format_context(tokens: int, model: str | None, css: dict) -> Text:
         style = css.get("warning", "yellow")
     else:
         style = css.get("success", "green")
-    return Text(label, style=style)
+    return Text(f"{label:>4}", style=style)
