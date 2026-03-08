@@ -2,10 +2,32 @@
 
 ## 0.15 — Loop Manager
 
-### 0.15.18
+### 0.15.1 – 0.15.18
 
+**Per-session activity cache**
+
+- Per-session activity cache files written from hooks (Python + Rust parity)
+- Activity log reads from per-session cache instead of global file
+- Tail-load transcripts on session switch (last 50KB) with immediate detail+log refresh
+- Clean up stale activity cache files alongside session state
+
+**Loop manager**
+
+- Cancel loops from loop panel (`x`/`X` keybindings)
+
+**UI overhaul**
+
+- Modernize TUI with minimal borders, cleaner detail panel
+- Consolidate session table from 7-8 columns to 5
+- Custom footer bar with styled keys and notification indicator
+- Smooth sub-character context bar using 1/8th block elements
 - Group headers render as full-width `── name ──` dividers that don't inflate column widths
-- Visual spacing between groups (blank line above non-first group headers)
+- Visual spacing between groups
+
+**Fixes**
+
+- Offload refresh I/O to threads to eliminate periodic UI stutter
+- Use `uv tool uninstall` when running in uv environment
 
 ### 0.15.0
 
