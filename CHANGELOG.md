@@ -2,6 +2,11 @@
 
 ## 0.15 — Loop Manager
 
+### 0.15.18
+
+- Group headers render as full-width `── name ──` dividers that don't inflate column widths
+- Visual spacing between groups (blank line above non-first group headers)
+
 ### 0.15.0
 
 - Add loop manager panel (`L` keybinding) — view scheduled tasks (loops/crons) across all sessions
