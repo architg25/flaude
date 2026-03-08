@@ -5,7 +5,7 @@ import os
 import subprocess
 from datetime import timedelta
 
-from flaude.constants import STALE_SESSION_TIMEOUT, utcnow
+from flaude.constants import STALE_SESSION_TIMEOUT, session_activity_path, utcnow
 from flaude.state.manager import StateManager
 from flaude.state.models import SessionState, SessionStatus, WAITING_STATUSES
 
@@ -38,6 +38,15 @@ def _get_active_cwds() -> set[str] | None:
         return None
 
 
+def _delete_with_cache(mgr: StateManager, sid: str) -> None:
+    """Delete session state and its activity cache file."""
+    mgr.delete_session(sid)
+    try:
+        session_activity_path(sid).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
     """Delete stale sessions. Returns count of cleaned sessions."""
     mgr = mgr or StateManager()
@@ -55,13 +64,13 @@ def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
 
     for sid, state in sessions.items():
         if state.status == SessionStatus.ENDED:
-            mgr.delete_session(sid)
+            _delete_with_cache(mgr, sid)
             cleaned += 1
             continue
 
         # Hard timeout: session hasn't reported anything in a long time
         if state.last_event_at < cutoff_stale:
-            mgr.delete_session(sid)
+            _delete_with_cache(mgr, sid)
             cleaned += 1
             continue
 
@@ -79,7 +88,7 @@ def cleanup_stale_sessions(mgr: StateManager | None = None) -> int:
                 continue
             cwd_normalized = (state.cwd or "").rstrip("/")
             if not cwd_normalized or cwd_normalized not in active_cwds:
-                mgr.delete_session(sid)
+                _delete_with_cache(mgr, sid)
                 cleaned += 1
                 continue
 
