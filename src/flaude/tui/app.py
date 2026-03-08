@@ -7,7 +7,7 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Footer, DataTable
+from textual.widgets import DataTable
 
 from flaude.config import load_config, save_config, migrate_notifications_config
 from flaude.constants import (
@@ -50,6 +50,7 @@ from flaude.tui.widgets.session_table import (
 from flaude.tui.widgets.session_detail import SessionDetail
 from flaude.tui.widgets.permission_panel import PermissionPanel
 from flaude.tui.widgets.activity_log import ActivityLog
+from flaude.tui.widgets.footer_bar import FooterBar
 
 
 class FlaudeApp(App):
@@ -59,19 +60,19 @@ class FlaudeApp(App):
     TITLE = "flaude"
 
     BINDINGS = [
-        Binding("q", "quit", "Quit"),
-        Binding("g", "goto_session", "Goto"),
-        Binding("n", "new_session", "New"),
-        Binding("p", "send_prompt", "Prompt"),
-        Binding("d", "exit_session", "Exit"),
-        Binding("l", "cycle_log_mode", "Log"),
-        Binding("s", "toggle_notifications", "Notif"),
-        Binding("S", "settings", "Settings"),
-        Binding("G", "assign_group", "Assign Group", show=False),
-        Binding("h", "toggle_hidden", "Hidden"),
-        Binding("t", "change_theme", "Theme", show=False),
-        Binding("question_mark", "help", "Help"),
-        Binding("L", "show_loops", "Loops"),
+        Binding("q", "quit", show=False),
+        Binding("g", "goto_session", show=False),
+        Binding("n", "new_session", show=False),
+        Binding("p", "send_prompt", show=False),
+        Binding("d", "exit_session", show=False),
+        Binding("l", "cycle_log_mode", show=False),
+        Binding("s", "toggle_notifications", show=False),
+        Binding("S", "settings", show=False),
+        Binding("G", "assign_group", show=False),
+        Binding("h", "toggle_hidden", show=False),
+        Binding("t", "change_theme", show=False),
+        Binding("question_mark", "help", show=False),
+        Binding("L", "show_loops", show=False),
     ]
 
     def __init__(self) -> None:
@@ -98,11 +99,16 @@ class FlaudeApp(App):
                     id="activity-log",
                 )
             yield SessionDetail(id="session-detail")
-        yield Footer()
+        yield FooterBar(id="footer-bar")
+
+    def _sync_footer(self) -> None:
+        enabled = self._config.get("notifications", {}).get("enabled", False)
+        self.query_one("#footer-bar", FooterBar).set_notifications(enabled)
 
     def on_mount(self) -> None:
         scan_preexisting_sessions(self._mgr)
         self._sync_notifier()
+        self._sync_footer()
         self.set_interval(TUI_REFRESH_INTERVAL, self._refresh_sessions)
         self.set_interval(TUI_REFRESH_INTERVAL * 2, self._refresh_log)
         self.set_interval(30.0, self._schedule_cleanup)
@@ -558,6 +564,7 @@ class FlaudeApp(App):
         notif["enabled"] = enabled
         save_config(self._config)
         self._sync_notifier()
+        self._sync_footer()
         self.notify(f"Notifications: {'ON' if enabled else 'OFF'}")
 
     def action_settings(self) -> None:
@@ -569,6 +576,7 @@ class FlaudeApp(App):
             self._config = result
             save_config(self._config)
             self._sync_notifier()
+            self._sync_footer()
             self.notify("Settings saved")
             # One-time notice when user first enables tmux backend
             if self._config.get("launch_backend") == "tmux" and not self._config.get(

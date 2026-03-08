@@ -2,10 +2,6 @@ Screen {
     layout: vertical;
 }
 
-Footer {
-    background: $surface;
-}
-
 #main-split {
     layout: horizontal;
     height: 1fr;
