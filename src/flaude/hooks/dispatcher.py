@@ -19,6 +19,7 @@ from flaude.constants import (
     ACTIVITY_LOG,
     LOGS_DIR,
     ensure_dirs,
+    session_activity_path,
     utcnow,
 )
 from flaude.git import get_git_info
@@ -56,7 +57,7 @@ def _log_activity(session_id: str, event: str, **fields: str) -> None:
         entry = {"ts": utcnow().strftime("%Y-%m-%dT%H:%M:%S"), "ev": event}
         entry.update(fields)
         line = json.dumps(entry, separators=(",", ":")) + "\n"
-        path = LOGS_DIR / f"{session_id}.activity.jsonl"
+        path = session_activity_path(session_id)
         with open(path, "a", encoding="utf-8") as f:
             f.write(line)
     except Exception:
@@ -572,7 +573,7 @@ def _handle_session_end(event: dict, sm: StateManager) -> None:
     session_id = event.get("session_id", "")
     sm.delete_session(session_id)
     try:
-        (LOGS_DIR / f"{session_id}.activity.jsonl").unlink(missing_ok=True)
+        session_activity_path(session_id).unlink(missing_ok=True)
     except OSError:
         pass
     _log(session_id, "SessionEnd")

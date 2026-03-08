@@ -716,9 +716,15 @@ class TestCronListReconcile:
 # ---------------------------------------------------------------------------
 
 
+def _patch_logs_dir(monkeypatch, tmp_path):
+    """Patch LOGS_DIR in both constants (for session_activity_path) and dispatcher."""
+    monkeypatch.setattr("flaude.constants.LOGS_DIR", tmp_path)
+    monkeypatch.setattr("flaude.hooks.dispatcher.LOGS_DIR", tmp_path)
+
+
 class TestLogActivity:
     def test_writes_pre_tool_use_entry(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("flaude.hooks.dispatcher.LOGS_DIR", tmp_path)
+        _patch_logs_dir(monkeypatch, tmp_path)
         _log_activity("sess-001", "PreToolUse", tool="Read", sum="foo.py")
         path = tmp_path / "sess-001.activity.jsonl"
         assert path.exists()
@@ -729,7 +735,7 @@ class TestLogActivity:
         assert "ts" in entry
 
     def test_writes_user_prompt_entry(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("flaude.hooks.dispatcher.LOGS_DIR", tmp_path)
+        _patch_logs_dir(monkeypatch, tmp_path)
         _log_activity("sess-001", "UserPrompt", text="Fix the bug")
         path = tmp_path / "sess-001.activity.jsonl"
         entry = json.loads(path.read_text().strip())
@@ -737,7 +743,7 @@ class TestLogActivity:
         assert entry["text"] == "Fix the bug"
 
     def test_writes_stop_entry(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("flaude.hooks.dispatcher.LOGS_DIR", tmp_path)
+        _patch_logs_dir(monkeypatch, tmp_path)
         _log_activity("sess-001", "Stop")
         path = tmp_path / "sess-001.activity.jsonl"
         entry = json.loads(path.read_text().strip())
@@ -745,7 +751,7 @@ class TestLogActivity:
         assert "tool" not in entry
 
     def test_appends_multiple_entries(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("flaude.hooks.dispatcher.LOGS_DIR", tmp_path)
+        _patch_logs_dir(monkeypatch, tmp_path)
         _log_activity("sess-001", "PreToolUse", tool="Read", sum="a.py")
         _log_activity("sess-001", "PreToolUse", tool="Edit", sum="b.py")
         path = tmp_path / "sess-001.activity.jsonl"
@@ -755,6 +761,7 @@ class TestLogActivity:
     def test_never_raises_on_bad_path(self, monkeypatch):
         from pathlib import Path
 
+        monkeypatch.setattr("flaude.constants.LOGS_DIR", Path("/nonexistent/path"))
         monkeypatch.setattr(
             "flaude.hooks.dispatcher.LOGS_DIR", Path("/nonexistent/path")
         )
@@ -768,7 +775,7 @@ class TestLogActivity:
 
 class TestHandlersWriteActivityCache:
     def test_pre_tool_use_writes_cache(self, mgr, tmp_path, monkeypatch, no_rules):
-        monkeypatch.setattr("flaude.hooks.dispatcher.LOGS_DIR", tmp_path)
+        _patch_logs_dir(monkeypatch, tmp_path)
         monkeypatch.setattr(
             "flaude.hooks.dispatcher.ACTIVITY_LOG", tmp_path / "activity.log"
         )
@@ -788,7 +795,7 @@ class TestHandlersWriteActivityCache:
         assert entry["tool"] == "Read"
 
     def test_session_end_deletes_cache(self, mgr, tmp_path, monkeypatch):
-        monkeypatch.setattr("flaude.hooks.dispatcher.LOGS_DIR", tmp_path)
+        _patch_logs_dir(monkeypatch, tmp_path)
         monkeypatch.setattr(
             "flaude.hooks.dispatcher.ACTIVITY_LOG", tmp_path / "activity.log"
         )
