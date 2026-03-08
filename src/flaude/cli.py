@@ -121,8 +121,14 @@ def _print_update_result(old_version: str) -> None:
     """Print update result by comparing old version to freshly installed one."""
     import subprocess
 
+    # Use importlib.metadata to read the *installed* package version,
+    # avoiding stale __version__ from editable/dev installs.
     new_version = subprocess.run(
-        [sys.executable, "-c", "import flaude; print(flaude.__version__)"],
+        [
+            sys.executable,
+            "-c",
+            "from importlib.metadata import version; print(version('flaude'))",
+        ],
         capture_output=True,
         text=True,
     ).stdout.strip()
@@ -159,7 +165,8 @@ def cmd_update(args: argparse.Namespace) -> None:
             uv,
             "pip",
             "install",
-            "--system",
+            "--python",
+            sys.executable,
             "--upgrade",
             "flaude",
             "--index-url",
