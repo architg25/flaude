@@ -7,3 +7,20 @@ template:
     publishDebian: False
     tox:
       version: 4
+
+overrides:
+  - pipeline: "Master build|Review Build"
+    override: insert-before
+    stage: ".*"
+    stages:
+      - stage: "Build Rust dispatcher"
+        tasks:
+          - task: "Cargo build"
+            steps:
+              - action: "gcr.io/action-containers/rust-action-container:1.93.0_20260123T120448@sha256:f4d7b3820b22148290ffc099b82098dadbe2221cb615a0da9a354affffa44279"
+                args: ["build", "--release"]
+                workdir: rust
+              - action: "gcr.io/action-containers/bash:5.0-3_20260224T093916@sha256:59fd8507ea7bacf1cee60d1d37301e82ed8ea76dfe5b274f0d746adc8016b438"
+                args:
+                  - "-c"
+                  - "mkdir -p src/flaude/bin && cp rust/target/release/flaude-hook src/flaude/bin/ && chmod 755 src/flaude/bin/flaude-hook"
