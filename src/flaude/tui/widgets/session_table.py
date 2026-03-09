@@ -425,6 +425,10 @@ class SessionTable(DataTable):
             if self._last_order:
                 self.clear()
                 self._last_order = []
+            if hidden_count:
+                self.border_subtitle = f" 0 active ({hidden_count} hidden) "
+            else:
+                self.border_subtitle = ""
             return
 
         sorted_sessions = _sort_sessions(sessions, auto_group, session_groups)
