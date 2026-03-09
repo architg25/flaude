@@ -57,13 +57,17 @@ TMUX_SESSION_NAME = "flaude"
 # Identifier used to detect flaude hooks in settings.json.
 # Try native Rust binary first, fall back to Python dispatcher.
 _HOOK_BINARY = Path(__file__).parent / "bin" / "flaude-hook"
-if _HOOK_BINARY.exists() and os.access(_HOOK_BINARY, os.X_OK):
-    HOOK_COMMAND = str(_HOOK_BINARY)
-else:
-    HOOK_COMMAND = f"{sys.executable} -m flaude.hooks.dispatcher"
-
-# Used to identify any flaude hook (Rust or Python) in settings.json
 HOOK_COMMAND_PYTHON = f"{sys.executable} -m flaude.hooks.dispatcher"
+
+
+def resolve_hook_command() -> str:
+    """Return the best available hook command (Rust binary or Python fallback)."""
+    if _HOOK_BINARY.exists() and os.access(_HOOK_BINARY, os.X_OK):
+        return str(_HOOK_BINARY)
+    return HOOK_COMMAND_PYTHON
+
+
+HOOK_COMMAND = resolve_hook_command()
 
 # Model token limits — single source of truth
 MODEL_LIMITS: dict[str, int] = {

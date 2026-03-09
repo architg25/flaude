@@ -97,7 +97,7 @@ class TestFormatContext:
 
 class TestHookHelpers:
     def test_build_hook_entry_structure(self):
-        entry = _build_hook_entry()
+        entry = _build_hook_entry("flaude-hook")
         assert entry["matcher"] == ""
         assert len(entry["hooks"]) == 1
         hook = entry["hooks"][0]
@@ -105,7 +105,7 @@ class TestHookHelpers:
         assert "flaude" in hook["command"]
 
     def test_is_flaude_hook_true(self):
-        entry = _build_hook_entry()
+        entry = _build_hook_entry("flaude-hook")
         assert _is_flaude_hook(entry) is True
 
     def test_is_flaude_hook_false(self):

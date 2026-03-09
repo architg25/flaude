@@ -10,16 +10,17 @@ from pathlib import Path
 
 from flaude.constants import (
     CLAUDE_SETTINGS_PATH,
-    HOOK_COMMAND,
     HOOK_COMMAND_PYTHON,
     HOOK_TIMEOUT_DEFAULT,
     RULES_PATH,
     SESSIONS_DIR,
     STATE_DIR,
     DASHBOARD_PID,
+    _HOOK_BINARY,
     atomic_write,
     ensure_dirs,
     get_model_limit,
+    resolve_hook_command,
     utcnow,
 )
 from flaude.config import load_config, save_config
@@ -40,13 +41,13 @@ HOOK_EVENTS = [
 ]
 
 
-def _build_hook_entry() -> dict:
+def _build_hook_entry(hook_command: str) -> dict:
     return {
         "matcher": "",
         "hooks": [
             {
                 "type": "command",
-                "command": HOOK_COMMAND,
+                "command": hook_command,
                 "timeout": HOOK_TIMEOUT_DEFAULT,
             }
         ],
@@ -111,6 +112,8 @@ def _copy_default_rules() -> None:
     RULES_PATH.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(default_rules, RULES_PATH)
 
+
+_GIT_SSH_URL = "ssh://git@ghe.spotify.net/vibes/flaude.git"
 
 _ARTIFACTORY_INDEX = "https://artifactory.spotify.net/artifactory/api/pypi/pypi/simple/"
 _GIT_URL = "git+ssh://git@ghe.spotify.net/vibes/flaude.git"
@@ -231,19 +234,85 @@ def cmd_update(args: argparse.Namespace) -> None:
     sys.exit(1)
 
 
+def _try_compile_rust() -> bool:
+    """Compile the Rust dispatcher if missing. Returns True if binary is available."""
+    if _HOOK_BINARY.exists() and os.access(_HOOK_BINARY, os.X_OK):
+        return True
+
+    cargo = shutil.which("cargo")
+    if not cargo:
+        return False
+
+    import subprocess
+    import tempfile
+
+    print("Rust dispatcher not found — compiling from source...")
+    with tempfile.TemporaryDirectory() as tmp:
+        repo_dir = Path(tmp) / "repo"
+        install_dir = Path(tmp) / "out"
+
+        # Shallow clone just enough to build
+        try:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", _GIT_SSH_URL, str(repo_dir)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            print("  Failed to clone source — using Python fallback.")
+            return False
+
+        try:
+            subprocess.run(
+                [
+                    "cargo",
+                    "install",
+                    "--path",
+                    str(repo_dir / "rust"),
+                    "--root",
+                    str(install_dir),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            print("  Rust compilation failed — using Python fallback.")
+            return False
+
+        built = install_dir / "bin" / "flaude-hook"
+        if not built.exists():
+            print("  Binary not found after build — using Python fallback.")
+            return False
+
+        _HOOK_BINARY.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(built), str(_HOOK_BINARY))
+        _HOOK_BINARY.chmod(0o755)
+        print("  Compiled native Rust dispatcher.")
+        return True
+
+
 def cmd_init(args: argparse.Namespace) -> None:
     """Install flaude hooks into Claude Code settings."""
     settings = _load_settings()
     hooks = settings.setdefault("hooks", {})
 
     if args.dry_run:
-        dispatcher = "Rust" if HOOK_COMMAND != HOOK_COMMAND_PYTHON else "Python"
+        hook_cmd = resolve_hook_command()
+        dispatcher = "Rust" if hook_cmd != HOOK_COMMAND_PYTHON else "Python"
         print(f"Dry run — would install hooks ({dispatcher} dispatcher):")
-        print(f"  Hook command: {HOOK_COMMAND}")
+        print(f"  Hook command: {hook_cmd}")
         for event in HOOK_EVENTS:
             print(f"  {event} (timeout: {HOOK_TIMEOUT_DEFAULT}s)")
         print(f"\nSettings file: {CLAUDE_SETTINGS_PATH}")
         return
+
+    # Compile Rust dispatcher if not already present
+    _try_compile_rust()
+    hook_cmd = resolve_hook_command()
 
     backup = _backup_settings()
     if backup:
@@ -254,17 +323,17 @@ def cmd_init(args: argparse.Namespace) -> None:
         # Remove existing flaude hooks
         event_hooks[:] = [h for h in event_hooks if not _is_flaude_hook(h)]
         # Add new flaude hook
-        event_hooks.append(_build_hook_entry())
+        event_hooks.append(_build_hook_entry(hook_cmd))
 
     _save_settings(settings)
     ensure_dirs()
     _copy_default_rules()
 
-    if HOOK_COMMAND != HOOK_COMMAND_PYTHON:
+    if hook_cmd != HOOK_COMMAND_PYTHON:
         print("flaude hooks installed (native Rust dispatcher).")
     else:
         print("flaude hooks installed (Python dispatcher).")
-    print(f"  Hook: {HOOK_COMMAND}")
+    print(f"  Hook: {hook_cmd}")
     print(f"  Settings: {CLAUDE_SETTINGS_PATH}")
     print(f"  State dir: {SESSIONS_DIR.parent}")
     print(f"\nRun 'flaude' to start the dashboard.")
