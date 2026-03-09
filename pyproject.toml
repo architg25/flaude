@@ -20,9 +20,6 @@ flaude = "flaude.cli:main"
 [tool.hatch.version]
 path = "src/flaude/__init__.py"
 
-[tool.hatch.build.targets.sdist]
-artifacts = ["src/flaude/bin/*"]
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/flaude"]
 artifacts = ["src/flaude/bin/*"]
