@@ -22,7 +22,7 @@ Screen {
 }
 
 #left-pane {
-    width: 3fr;
+    width: 65%;
     layout: vertical;
 }
 
@@ -87,7 +87,7 @@ PermissionPanel .urgent {
 
 /* ── Detail Panel ── */
 #session-detail {
-    width: 2fr;
+    width: 35%;
     min-width: 35;
     margin: 0 1 0 0;
     padding: 1 2;
