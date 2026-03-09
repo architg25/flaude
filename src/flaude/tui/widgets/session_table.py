@@ -94,7 +94,7 @@ _TERMINAL_ABBREV = {
 }
 
 _MODE_ABBREV = {
-    "default": "─",
+    "default": "-",
     "plan": "plan",
     "acceptEdits": "edit",
     "bypassPermissions": "yolo",
@@ -132,24 +132,23 @@ def _build_row_data(
     status_text = Text(
         f"{tree_prefix}{info.indicator} {short_label} {duration}",
         style=style,
-        justify="center",
+        justify="left",
     )
     session = Text(_format_session_identity(state), justify="center")
     project = Text(_format_project(state), justify="center")
 
-    # Environment: abbreviated terminal + mode (only if non-default)
+    # Environment: terminal | mode
     if state.is_tmux:
-        parent = state.parent_terminal or "?"
-        term = f"{_abbrev_terminal(parent)}|tmux"
+        term = "tmux"
     else:
         term = _abbrev_terminal(state.terminal or "?")
     mode = _abbrev_mode(state.permission_mode or "default")
-    environment = Text(f"{term:<3} | {mode}", justify="center")
+    environment = Text(f"{term:>4} | {mode:<4}")
 
-    # Usage: context tokens (colored) · uptime (dim)
+    # Usage: context tokens | uptime
     context = _format_context(state.context_tokens, state.model, css)
     uptime = format_uptime(now, state.started_at)
-    usage = Text.assemble(context, Text(f" | {uptime}", style="dim"))
+    usage = Text.assemble(context, Text(f" | {uptime:>5}", style="dim"))
     usage.justify = "center"
 
     return status_text, session, project, environment, usage
