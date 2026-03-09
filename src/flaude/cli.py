@@ -120,8 +120,8 @@ _GIT_URL = "git+ssh://git@ghe.spotify.net/vibes/flaude.git"
 _GIT_URL_OLD = "git+ssh://git@ghe.spotify.net/architg/flaude.git"
 
 
-def _print_update_result(old_version: str) -> None:
-    """Print update result by comparing old version to freshly installed one."""
+def _print_update_result(old_version: str) -> bool:
+    """Print update result. Returns True if version actually changed."""
     import subprocess
 
     # Use importlib.metadata to read the *installed* package version,
@@ -138,9 +138,12 @@ def _print_update_result(old_version: str) -> None:
 
     if new_version == old_version:
         print(f"Already up to date ({old_version}).")
+        print()
+        return False
     else:
         print(f"Updated: {old_version} -> {new_version}")
-    print()
+        print()
+        return True
 
 
 def _run_init() -> None:
@@ -191,8 +194,8 @@ def cmd_update(args: argparse.Namespace) -> None:
             cmd.append("--prerelease=disallow")
         result = subprocess.run(cmd)
         if result.returncode == 0:
-            _print_update_result(__version__)
-            _run_init()
+            if _print_update_result(__version__):
+                _run_init()
             return
 
     # Strategy 2: pip from Artifactory
@@ -210,8 +213,8 @@ def cmd_update(args: argparse.Namespace) -> None:
         cmd.append("--no-pre")
     result = subprocess.run(cmd)
     if result.returncode == 0:
-        _print_update_result(__version__)
-        _run_init()
+        if _print_update_result(__version__):
+            _run_init()
         return
 
     # Strategy 3: pip from git+ssh (fallback)
@@ -220,8 +223,8 @@ def cmd_update(args: argparse.Namespace) -> None:
             [sys.executable, "-m", "pip", "install", "--force-reinstall", url]
         )
         if result.returncode == 0:
-            _print_update_result(__version__)
-            _run_init()
+            if _print_update_result(__version__):
+                _run_init()
             return
 
     print(
