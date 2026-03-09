@@ -97,6 +97,7 @@ _MODE_ABBREV = {
     "default": "─",
     "plan": "plan",
     "acceptEdits": "edit",
+    "bypassPermissions": "yolo",
 }
 
 _TABLE_LABEL_ABBREV = {
