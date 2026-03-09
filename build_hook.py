@@ -82,6 +82,13 @@ class RustBuildHook(BuildHookInterface):
         if resolved:
             self._write_version(resolved)
 
+        # If the binary already exists (e.g. placed by CI or included in sdist),
+        # skip the Rust build entirely.
+        dest = Path(self.root) / "src" / "flaude" / "bin" / "flaude-hook"
+        if dest.exists():
+            self._log(f"Binary already present at {dest}, skipping Rust build")
+            return
+
         rust_dir = Path(self.root) / "rust"
         if not rust_dir.exists():
             return
