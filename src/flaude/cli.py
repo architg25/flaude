@@ -149,12 +149,8 @@ def _run_init() -> None:
     Must use subprocess so the freshly-installed code is loaded — otherwise
     HOOK_COMMAND (resolved at import time) would still point to the old
     dispatcher (e.g. Python fallback when Rust binary wasn't yet installed).
-
-    Deletes the existing binary first so init recompiles from the new source.
     """
     import subprocess
-
-    _HOOK_BINARY.unlink(missing_ok=True)
 
     subprocess.run(
         [
