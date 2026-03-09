@@ -141,9 +141,21 @@ def _print_update_result(old_version: str) -> None:
 
 
 def _run_init() -> None:
-    """Run hook init after update."""
-    init_args = argparse.Namespace(dry_run=False)
-    cmd_init(init_args)
+    """Run hook init after update.
+
+    Must use subprocess so the freshly-installed code is loaded — otherwise
+    HOOK_COMMAND (resolved at import time) would still point to the old
+    dispatcher (e.g. Python fallback when Rust binary wasn't yet installed).
+    """
+    import subprocess
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.argv = ['flaude', 'init']; from flaude.cli import main; main()",
+        ]
+    )
 
 
 def cmd_update(args: argparse.Namespace) -> None:
